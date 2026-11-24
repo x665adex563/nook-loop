@@ -1,0 +1,21 @@
+{
+  "name": "周回VR",
+  "enabled": true,
+  "hotkey": "F9",
+  "window_title": "ActionTaimanin",
+  "repeat": {
+    "mode": "loop",
+    "interval": 30.0
+  },
+  "commands": [
+    {
+      "type": "click",
+      "x": 1714,
+      "y": 1012
+    },
+    {
+      "type": "wait",
+      "seconds": 1
+    }
+  ]
+}

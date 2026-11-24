@@ -3,16 +3,37 @@ from ctypes import wintypes
 
 user32 = ctypes.windll.user32
 
+ENUMPROC = ctypes.WINFUNCTYPE(
+    wintypes.BOOL,
+    wintypes.HWND,
+    wintypes.LPARAM
+)
+
+user32.EnumWindows.argtypes = [ENUMPROC, wintypes.LPARAM]
+user32.IsWindow.argtypes = [wintypes.HWND]
+user32.IsWindowVisible.argtypes = [wintypes.HWND]
+user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+user32.GetWindowTextW.argtypes = [
+    wintypes.HWND,
+    wintypes.LPWSTR,
+    ctypes.c_int
+]
+user32.GetWindowThreadProcessId.argtypes = [
+    wintypes.HWND,
+    ctypes.POINTER(wintypes.DWORD)
+]
+
 
 def get_windows():
     windows = []
 
-    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    @ENUMPROC
     def callback(hwnd, lparam):
         if not user32.IsWindowVisible(hwnd):
             return True
 
         length = user32.GetWindowTextLengthW(hwnd)
+
         if length == 0:
             return True
 
@@ -32,7 +53,26 @@ def get_windows():
 
     user32.EnumWindows(callback, 0)
 
-    return windows
+    return sorted(
+        windows,
+        key=lambda window: window["title"].casefold()
+    )
+
+
+def is_window(hwnd):
+    return bool(user32.IsWindow(hwnd))
+
+
+def find_window(title):
+    matches = [
+        window for window in get_windows()
+        if window["title"] == title
+    ]
+
+    if len(matches) != 1:
+        return None
+
+    return matches[0]
 
 
 if __name__ == "__main__":

@@ -1,0 +1,22 @@
+{
+  "name": "333",
+  "enabled": false,
+  "window_title": "Background Input Win32 Test",
+  "repeat": {
+    "mode": "once",
+    "interval": 30.0
+  },
+  "commands": [
+    {
+      "type": "click",
+      "x": 179,
+      "y": 202
+    },
+    {
+      "type": "key",
+      "key": "A",
+      "hold_ms": 300.0
+    }
+  ],
+  "hotkey": "F9"
+}
