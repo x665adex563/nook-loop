@@ -1,3 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
+
+# User macro data
+data/macros/*
+!data/macros/.gitkeep
