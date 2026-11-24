@@ -20,7 +20,7 @@ class App:
     def __init__(self, root):
         self.root = root
 
-        self.root.title("Background Input")
+        self.root.title("Nook Loop")
         self.root.geometry("1050x720")
         self.root.minsize(850, 550)
 
