@@ -2,7 +2,6 @@
 __pycache__/
 *.pyc
 
-# User data
+# User macro data
 data/macros/*
 !data/macros/.gitkeep
-data/config.json
