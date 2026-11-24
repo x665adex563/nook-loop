@@ -13,6 +13,11 @@ from core.bg_input import KEY_MAP
 from services.macro_manager import MacroManager, MACROS_DIR
 from services.macro_runner import MacroRunner
 from ui.coordinate_picker import pick_coordinate
+from ui.theme import (
+    THEMES,
+    apply_ttk_theme,
+    apply_titlebar_theme
+)
 from PIL import Image, ImageDraw, ImageGrab, ImageTk
 
 
@@ -44,6 +49,10 @@ class App:
         self.config = self.manager.load_config()
         self.font_size = self.config.get("font_size", "小")
 
+        self.theme = self.config.get("theme", "light")
+        self.colors = THEMES[self.theme]
+        self.light_ttk_theme = ttk.Style().theme_use()
+
         self.current_path = None
         self.current_data = None
         self.selected_path = None
@@ -61,7 +70,7 @@ class App:
         self.windows = []
 
         self.build_ui()
-        self.apply_font_size()
+        self.apply_theme()
         self.refresh_windows()
         self.refresh_tree()
         self.register_hotkey()
@@ -155,6 +164,138 @@ class App:
         )
 
         self.update_tree_status()
+
+    def update_colored_buttons(self):
+        for button, color in (
+            (self.add_file_button, "blue"),
+            (self.add_command_button, "blue"),
+            (self.macro_start_button, "green")
+        ):
+            background, active, foreground = self.colors[color]
+
+            button.configure(
+                background=background,
+                activebackground=active,
+                foreground=foreground,
+                activeforeground=foreground,
+                disabledforeground=self.colors["disabled_foreground"]
+            )
+
+    def update_status_light_backgrounds(self):
+        background = ttk.Style().lookup(
+            "TFrame", "background"
+        )
+
+        self.status_light.configure(
+            background=background
+        )
+
+        self.macro_status_light.configure(
+            background=background
+        )
+
+    def update_log_theme(self):
+        if self.theme == "light":
+            self.log_text.configure(
+                **self.light_log_colors
+            )
+        else:
+            self.log_text.configure(
+                background=self.colors["input"],
+                foreground=self.colors["foreground"],
+                insertbackground=self.colors["foreground"],
+                selectbackground=self.colors["selection"],
+                selectforeground=self.colors["foreground"],
+                highlightbackground=self.colors["border"],
+                highlightcolor=self.colors["border"]
+            )
+
+    def update_combobox_theme(self):
+        if self.theme == "dark":
+            colors = {
+                "background": self.colors["input"],
+                "foreground": self.colors["foreground"],
+                "selectbackground": self.colors["selection"],
+                "selectforeground": self.colors["foreground"]
+            }
+        else:
+            colors = {
+                "background": "SystemWindow",
+                "foreground": "SystemWindowText",
+                "selectbackground": "SystemHighlight",
+                "selectforeground": "SystemHighlightText"
+            }
+
+        for combo in (
+            self.window_combo,
+            self.mode_combo,
+            self.kind_combo
+        ):
+            popdown = combo.tk.call(
+                "ttk::combobox::PopdownWindow",
+                str(combo)
+            )
+
+            combo.tk.call(
+                f"{popdown}.f.l",
+                "configure",
+                *[
+                    value
+                    for key, color in colors.items()
+                    for value in (f"-{key}", color)
+                ]
+            )
+
+    def apply_theme(self):
+        apply_ttk_theme(
+            self.root,
+            self.theme,
+            self.light_ttk_theme
+        )
+
+        self.apply_font_size()
+
+        self.command_canvas.configure(
+            background=ttk.Style().lookup(
+                "TFrame", "background"
+            )
+        )
+
+        self.update_colored_buttons()
+        self.update_status_light_backgrounds()
+        self.update_log_theme()
+        self.update_combobox_theme()
+
+        self.tree.tag_configure(
+            "drop_target",
+            background=self.colors["drop_target"]
+        )
+
+        self.root.after_idle(
+            lambda: apply_titlebar_theme(
+                self.root,
+                self.theme
+            )
+        )
+
+        self.update_status()
+
+    def toggle_theme(self):
+        self.theme = (
+            "dark" if self.theme == "light"
+            else "light"
+        )
+
+        self.colors = THEMES[self.theme]
+
+        self.theme_button.config(
+            text="☀" if self.theme == "light" else "☾"
+        )
+
+        self.apply_theme()
+
+        self.config["theme"] = self.theme
+        self.manager.save_config(self.config)
 
     def cycle_font_size(self):
         sizes = ["小", "中", "大"]
@@ -366,6 +507,23 @@ class App:
             "切換字體大小"
         )
 
+        self.theme_button = ttk.Button(
+            toolbar,
+            text="☀" if self.theme == "light" else "☾",
+            width=3,
+            command=self.toggle_theme
+        )
+
+        self.theme_button.pack(
+            side=tk.LEFT,
+            padx=(0, 3)
+        )
+
+        self.add_tooltip(
+            self.theme_button,
+            "切換深淺色模式"
+        )
+
         self.status_light = self.create_status_light(
             toolbar
         )
@@ -375,20 +533,7 @@ class App:
     def create_colored_button(
         self, parent, color="blue", **kwargs
     ):
-        colors = {
-            "blue": (
-                "#DCEEFF",
-                "#C5E2FA",
-                "#245A85"
-            ),
-            "green": (
-                "#D9EFD9",
-                "#C1E3C1",
-                "#285C35"
-            )
-        }
-
-        background, active, foreground = colors[color]
+        background, active, foreground = self.colors[color]
 
         return tk.Button(
             parent,
@@ -396,7 +541,7 @@ class App:
             activebackground=active,
             foreground=foreground,
             activeforeground=foreground,
-            disabledforeground="#909E90",
+            disabledforeground=self.colors["disabled_foreground"],
             font="TkDefaultFont",
             relief="flat",
             borderwidth=0,
@@ -411,7 +556,7 @@ class App:
         image = Image.new("RGBA", (48, 48))
         draw = ImageDraw.Draw(image)
 
-        color = "#404040"
+        color = self.colors["icon"]
 
         if folder:
             draw.line(
@@ -547,7 +692,7 @@ class App:
 
         self.tree_header_separator = tk.Frame(
             self.tree,
-            background="#E5E5E5",
+            background=self.colors["separator"],
             height=1,
             borderwidth=0
         )
@@ -572,7 +717,7 @@ class App:
 
         self.tree.tag_configure(
             "drop_target",
-            background="#C8E6C9"
+            background=self.colors["drop_target"]
         )
 
     def build_editor(self):
@@ -704,20 +849,27 @@ class App:
 
         self.kind_var = tk.StringVar(value="鍵盤輸入")
 
-        ttk.Combobox(
+        self.kind_combo = ttk.Combobox(
             command_header,
             textvariable=self.kind_var,
             values=("鍵盤輸入", "滑鼠點擊", "等待"),
             state="readonly",
             width=10
-        ).pack(side=tk.LEFT, padx=(0, 5))
+        )
 
-        self.create_colored_button(
+        self.kind_combo.pack(
+            side=tk.LEFT,
+            padx=(0, 5)
+        )
+
+        self.add_command_button = self.create_colored_button(
             command_header,
             color="blue",
             text="+ 新增指令",
             command=self.add_command
-        ).pack(side=tk.LEFT)
+        )
+
+        self.add_command_button.pack(side=tk.LEFT)
 
         self.macro_hotkey_button = ttk.Button(
             command_header,
@@ -930,6 +1082,19 @@ class App:
             state="disabled",
             font=("Consolas", 10)
         )
+
+        self.light_log_colors = {
+            option: self.log_text.cget(option)
+            for option in (
+                "background",
+                "foreground",
+                "insertbackground",
+                "selectbackground",
+                "selectforeground",
+                "highlightbackground",
+                "highlightcolor"
+            )
+        }
 
         self.log_text.pack(
             fill=tk.BOTH,
@@ -2138,7 +2303,7 @@ class App:
         placeholder = tk.Label(
             row,
             text="",
-            background="#D9D9D9",
+            background=self.colors["placeholder"],
             relief="solid",
             borderwidth=1
         )
@@ -2697,7 +2862,7 @@ class App:
             self.macro_start_button.config(
                 text="執行",
                 state="disabled",
-                background="#DFE7DF",
+                background=self.colors["green_disabled"],
                 cursor="arrow"
             )
 
@@ -2748,8 +2913,8 @@ class App:
             text=f"{text} [{hotkey}]" if hotkey else text,
             state="normal" if running or enabled
             else "disabled",
-            background="#D9EFD9" if running or enabled
-            else "#DFE7DF",
+            background=self.colors["green"][0] if running or enabled
+            else self.colors["green_disabled"],
             cursor="hand2" if running or enabled
             else "arrow"
         )
@@ -2760,6 +2925,15 @@ class App:
         )
 
     def update_tree_separators(self):
+        self.tree_header_separator.configure(
+            background=self.colors["separator"]
+        )
+
+        for separator in self.tree_separators.values():
+            separator.configure(
+                background=self.colors["separator"]
+            )
+
         header_y = 0
 
         for y in range(self.tree.winfo_height()):
@@ -2807,7 +2981,7 @@ class App:
             if iid not in self.tree_separators:
                 self.tree_separators[iid] = tk.Frame(
                     self.tree,
-                    background="#E5E5E5",
+                    background=self.colors["separator"],
                     height=1,
                     borderwidth=0
                 )
@@ -2924,7 +3098,7 @@ class App:
         )
 
         if "drop_target" in self.tree.item(iid, "tags"):
-            background = "#C8E6C9"
+            background = self.colors["drop_target"]
 
         canvas.configure(
             background=background or "#FFFFFF",
