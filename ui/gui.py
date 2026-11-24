@@ -21,6 +21,9 @@ class App:
         self.root = root
 
         self.root.title("Nook Loop")
+        self.root.iconbitmap(
+            str(Path(__file__).resolve().parent.parent / "assets" / "icon.ico")
+        )
         self.root.geometry("1050x720")
         self.root.minsize(850, 550)
 
