@@ -22,7 +22,6 @@ class MacroRunner:
 
     def start(self, macros):
         if not macros:
-            self.log("沒有已勾選的巨集")
             return False
 
         started = False
@@ -38,9 +37,6 @@ class MacroRunner:
 
         with self.lock:
             if path in self.tasks:
-                return False
-
-            if not macro.get("enabled", False):
                 return False
 
             stop_event = threading.Event()

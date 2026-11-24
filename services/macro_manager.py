@@ -77,9 +77,7 @@ class MacroManager:
         data = self.load(path)
 
         if "hotkey" not in data:
-            data["hotkey"] = self.load_config().get(
-                "hotkey", "F8"
-            )
+            data["hotkey"] = ""
 
             self.save(path, data)
 
@@ -110,7 +108,7 @@ class MacroManager:
         data = {
             "name": path.stem,
             "enabled": False,
-            "hotkey": self.load_config().get("hotkey", "F8"),
+            "hotkey": "",
             "window_title": "",
             "repeat": {
                 "mode": "once",
@@ -243,7 +241,7 @@ class MacroManager:
 
     def load_config(self):
         if not CONFIG_PATH.exists():
-            return {"hotkey": "F8"}
+            return {}
 
         return self.load(CONFIG_PATH)
 

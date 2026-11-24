@@ -186,10 +186,6 @@ class App:
             "TFrame", "background"
         )
 
-        self.status_light.configure(
-            background=background
-        )
-
         self.macro_status_light.configure(
             background=background
         )
@@ -418,9 +414,9 @@ class App:
         )
 
         hotkey_width, status_width, delete_width = {
-            "小": (100, 45, 45),
-            "中": (130, 60, 60),
-            "大": (160, 75, 75)
+            "小": (100, 100, 45),
+            "中": (130, 130, 60),
+            "大": (160, 160, 75)
         }[self.font_size]
 
         self.tree.column(
@@ -441,37 +437,6 @@ class App:
     def build_toolbar(self, parent):
         toolbar = ttk.Frame(parent)
         toolbar.pack(side=tk.LEFT)
-
-        self.toolbar = toolbar
-        self.hotkey_entry = None
-
-        self.start_button = ttk.Button(
-            toolbar,
-            text="全部執行",
-            command=self.toggle_running
-        )
-
-        self.start_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
-
-        self.hotkey_button = ttk.Button(
-            toolbar,
-            text="✎",
-            width=3,
-            command=self.configure_hotkey
-        )
-
-        self.hotkey_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
-
-        self.add_tooltip(
-            self.hotkey_button,
-            "更改快捷鍵"
-        )
 
         self.log_button = ttk.Button(
             toolbar,
@@ -523,12 +488,6 @@ class App:
             self.theme_button,
             "切換深淺色模式"
         )
-
-        self.status_light = self.create_status_light(
-            toolbar
-        )
-
-        self.status_light.pack(side=tk.LEFT)
 
     def create_colored_button(
         self, parent, color="blue", **kwargs
@@ -609,8 +568,6 @@ class App:
         header = ttk.Frame(self.left)
         header.pack(fill=tk.X, pady=(0, 6))
 
-        self.build_toolbar(header)
-
         self.add_file_icon = self.create_add_icon()
         self.add_folder_icon = self.create_add_icon(
             folder=True
@@ -630,7 +587,10 @@ class App:
             pady=2
         )
 
-        self.add_file_button.pack(side=tk.RIGHT)
+        self.add_file_button.pack(
+            side=tk.LEFT,
+            padx=(0, 3)
+        )
 
         self.add_tooltip(
             self.add_file_button,
@@ -644,14 +604,16 @@ class App:
         )
 
         self.add_folder_button.pack(
-            side=tk.RIGHT,
-            padx=4
+            side=tk.LEFT,
+            padx=(0, 3)
         )
 
         self.add_tooltip(
             self.add_folder_button,
             "新增資料夾"
         )
+
+        self.build_toolbar(header)
 
         self.tree = ttk.Treeview(
             self.left,
@@ -663,7 +625,7 @@ class App:
 
         self.tree.heading("#0", text="名稱")
         self.tree.heading("hotkey", text="快捷鍵")
-        self.tree.heading("status", text="狀態")
+        self.tree.heading("status", text="啟用快捷鍵")
         self.tree.heading("delete", text="")
 
         self.tree.column("#0", width=170, minwidth=100)
@@ -899,20 +861,6 @@ class App:
             padx=(0, 5)
         )
 
-        self.macro_enabled_var = tk.BooleanVar(value=False)
-
-        self.macro_enabled_check = ttk.Checkbutton(
-            command_header,
-            variable=self.macro_enabled_var,
-            command=self.toggle_current_enabled,
-            state="disabled"
-        )
-
-        self.macro_enabled_check.pack(
-            side=tk.RIGHT,
-            padx=(0, 5)
-        )
-
         self.macro_status_light = self.create_status_light(
             command_header
         )
@@ -920,6 +868,11 @@ class App:
         self.macro_status_light.pack(
             side=tk.RIGHT,
             padx=(0, 3)
+        )
+
+        self.macro_status_light.bind(
+            "<Button-1>",
+            self.on_macro_status_click
         )
 
         command_area = ttk.Frame(self.editor_body)
@@ -1246,8 +1199,17 @@ class App:
 
         self.load_macro(path)
 
+    def can_toggle_enabled(self, path):
+        if path.is_dir():
+            return not any(
+                self.runner.is_macro_running(child)
+                for child in self.manager.get_macros(path)
+            )
+
+        return not self.runner.is_macro_running(path)
+
     def toggle_enabled(self, path):
-        if self.runner.is_running():
+        if not self.can_toggle_enabled(path):
             return
 
         if path.is_dir():
@@ -1275,12 +1237,6 @@ class App:
         self.refresh_tree()
         self.register_hotkey()
 
-    def toggle_current_enabled(self):
-        if self.current_path:
-            self.toggle_enabled(self.current_path)
-
-        self.update_macro_status()
-
     def on_tree_click(self, event):
         iid = self.tree.identify_row(event.y)
         column = self.tree.identify_column(event.x)
@@ -1304,7 +1260,8 @@ class App:
             if column == "#0":
                 return
 
-            return "break"
+            if column != "#2":
+                return "break"
 
         if not iid:
             return
@@ -2458,14 +2415,12 @@ class App:
             )
 
     def register_hotkey(self):
-        global_hotkey = self.config.get("hotkey", "F8")
-
-        hotkeys = [global_hotkey]
+        hotkeys = []
         errors = []
 
         for macro in self.manager.get_enabled_macros().values():
             hotkeys.append(
-                macro.get("hotkey", global_hotkey)
+                macro.get("hotkey", "")
             )
 
         try:
@@ -2485,137 +2440,10 @@ class App:
 
         return errors
 
-    def configure_hotkey(self):
-        if self.runner.is_running():
-            return
-
-        if self.hotkey_entry is not None:
-            self.root.focus_set()
-            return
-
-        old = self.config.get("hotkey", "F8")
-        value = ""
-
-        self.hotkey.stop()
-
-        self.start_button.pack_forget()
-
-        def receive_key(key):
-            nonlocal value
-            value = key
-
-        entry = self.create_key_capture(
-            self.toolbar,
-            "",
-            receive_key
-        )
-
-        self.hotkey_entry = entry
-
-        entry.configure(
-            justify="center",
-            width=12
-        )
-
-        entry.pack(
-            side=tk.LEFT,
-            padx=(0, 3),
-            before=self.hotkey_button
-        )
-
-        finished = False
-        click_binding = None
-
-        def finish(event=None, cancel=False):
-            nonlocal finished, value
-
-            if finished:
-                return
-
-            finished = True
-
-            if cancel:
-                value = old
-
-            if click_binding is not None:
-                self.root.unbind(
-                    "<Button-1>",
-                    click_binding
-                )
-
-            self.hotkey_entry = None
-            entry.destroy()
-
-            self.start_button.pack(
-                side=tk.LEFT,
-                padx=(0, 3),
-                before=self.hotkey_button
-            )
-
-            try:
-                if value:
-                    self.hotkey.parse(value)
-
-                self.config["hotkey"] = value
-
-                errors = self.register_hotkey()
-
-                if errors:
-                    raise RuntimeError("\n".join(errors))
-
-                self.manager.save_config(self.config)
-
-                self.log(f"快捷鍵已註冊：{value}")
-
-            except Exception as error:
-                self.hotkey.stop()
-                self.config["hotkey"] = old
-
-                self.register_hotkey()
-
-                messagebox.showerror(
-                    "快捷鍵設定失敗",
-                    str(error)
-                )
-
-            self.update_status()
-
-        def confirm(event=None):
-            finish()
-            return "break"
-
-        def outside_click(event):
-            if event.widget != entry:
-                finish()
-
-        entry.bind(
-            "<FocusOut>",
-            finish,
-            add="+"
-        )
-
-        entry.bind(
-            "<Escape>",
-            lambda event: (finish(cancel=True), "break")[1]
-        )
-
-        click_binding = self.root.bind(
-            "<Button-1>",
-            outside_click,
-            add="+"
-        )
-
-        entry.focus_set()
-        entry.select_range(0, tk.END)
-
     def configure_macro_hotkey(
         self, path=None, inline=False
     ):
         if self.runner.is_running():
-            return
-
-        if self.hotkey_entry is not None:
-            self.root.focus_set()
             return
 
         if self.macro_hotkey_entry is not None:
@@ -2636,10 +2464,7 @@ class App:
                 return
 
         macro = self.manager.load_macro(path)
-        old = macro.get(
-            "hotkey",
-            self.config.get("hotkey", "F8")
-        )
+        old = macro.get("hotkey", "")
 
         value = ""
 
@@ -2792,36 +2617,24 @@ class App:
 
             macro = self.manager.load_macro(path)
 
-            if not macro.get("enabled", False):
-                return
-
             self.runner.start_macro(path, macro)
 
         self.update_status()
 
     def handle_hotkey(self, hotkey):
-        if (
-            self.hotkey_entry is not None
-            or self.macro_hotkey_entry is not None
-        ):
+        if self.macro_hotkey_entry is not None:
             return
 
         binding = self.hotkey.parse(hotkey)
-
-        global_hotkey = self.config.get("hotkey", "F8")
-
-        if global_hotkey and binding == self.hotkey.parse(global_hotkey):
-            self.toggle_running()
-            return
 
         macros = self.manager.get_enabled_macros()
 
         matched = {
             path: macro
             for path, macro in macros.items()
-            if macro.get("hotkey", global_hotkey)
+            if macro.get("hotkey")
             and self.hotkey.parse(
-                macro.get("hotkey", global_hotkey)
+                macro["hotkey"]
             ) == binding
         }
 
@@ -2839,24 +2652,6 @@ class App:
 
         self.update_status()
 
-    def toggle_running(self):
-        if (
-            self.hotkey_entry is not None
-            or self.macro_hotkey_entry is not None
-        ):
-            return
-
-        if self.runner.is_running():
-            self.runner.stop()
-        else:
-            self.save_settings()
-
-            macros = self.manager.get_enabled_macros()
-
-            self.runner.start(macros)
-
-        self.update_status()
-
     def update_macro_status(self):
         if not self.current_path or not self.current_data:
             self.macro_start_button.config(
@@ -2870,22 +2665,17 @@ class App:
                 state="disabled"
             )
 
-            self.macro_enabled_var.set(False)
-
             self.macro_status_light.delete("all")
 
-            self.macro_enabled_check.config(
-                state="disabled"
+            self.macro_status_light.configure(
+                cursor=""
             )
 
             return
 
         macro = self.current_data
 
-        hotkey = macro.get(
-            "hotkey",
-            self.config.get("hotkey", "F8")
-        )
+        hotkey = macro.get("hotkey", "")
 
         running = self.runner.is_macro_running(
             self.current_path
@@ -2897,26 +2687,20 @@ class App:
             self.macro_status_light,
             "running" if running
             else "enabled" if enabled
-            else ""
+            else "idle"
         )
 
-        self.macro_enabled_var.set(enabled)
-
-        self.macro_enabled_check.config(
-            state="disabled" if self.runner.is_running()
-            else "normal"
+        self.macro_status_light.configure(
+            cursor="" if running else "hand2"
         )
 
         text = "停止" if running else "執行"
 
         self.macro_start_button.config(
-            text=f"{text} [{hotkey}]" if hotkey else text,
-            state="normal" if running or enabled
-            else "disabled",
-            background=self.colors["green"][0] if running or enabled
-            else self.colors["green_disabled"],
-            cursor="hand2" if running or enabled
-            else "arrow"
+            text=f"{text} [{hotkey}]" if hotkey and enabled else text,
+            state="normal",
+            background=self.colors["green"][0],
+            cursor="hand2"
         )
 
         self.macro_hotkey_button.config(
@@ -3014,8 +2798,14 @@ class App:
 
         self.update_tree_separators()
 
+    def on_macro_status_click(self, event):
+        if not self.current_path or not self.current_data:
+            return "break"
+
+        return self.on_status_click(self.current_path)
+
     def on_status_click(self, path):
-        if self.runner.is_running():
+        if not self.can_toggle_enabled(path):
             return "break"
 
         self.root.focus_set()
@@ -3102,8 +2892,7 @@ class App:
 
         canvas.configure(
             background=background or "#FFFFFF",
-            cursor="" if self.runner.is_running()
-            else "hand2"
+            cursor="" if running else "hand2"
         )
 
         self.draw_status_light(canvas, status)
@@ -3116,32 +2905,6 @@ class App:
         return True
 
     def update_status(self):
-        running = self.runner.is_running()
-
-        hotkey = self.config.get("hotkey", "F8")
-
-        text = "停止全部" if running else "全部執行"
-
-        self.start_button.config(
-            text=f"{text} [{hotkey}]" if hotkey else text
-        )
-
-        enabled = any(
-            self.tree.set(iid, "check") in ("☑", "▣")
-            for iid in self.tree.get_children()
-        )
-
-        self.draw_status_light(
-            self.status_light,
-            "running" if running
-            else "enabled" if enabled
-            else "idle"
-        )
-
-        self.hotkey_button.config(
-            state="disabled" if running else "normal"
-        )
-
         self.update_macro_status()
         self.update_tree_status()
 
