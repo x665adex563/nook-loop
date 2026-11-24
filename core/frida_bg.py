@@ -7,6 +7,7 @@ const user32 = Process.getModuleByName("user32.dll");
 const pressed = new Set();
 let cursorPosition = null;
 let cursorTimer = null;
+let keyboardHwnd = null;
 
 for (const name of [
     "GetForegroundWindow",
@@ -15,7 +16,9 @@ for (const name of [
 ]) {
     Interceptor.attach(user32.getExportByName(name), {
         onLeave(retval) {
-            if (cursorPosition !== null) {
+            if (keyboardHwnd !== null && pressed.size > 0) {
+                retval.replace(keyboardHwnd);
+            } else if (cursorPosition !== null) {
                 retval.replace(cursorPosition.hwnd);
             }
         }
@@ -105,16 +108,22 @@ setcursor(hwnd, sx, sy, cx, cy) {
     }, 500);
 },
 
-    setkey(vk, down) {
+    setkey(hwnd, vk, down) {
         if (down) {
+            keyboardHwnd = ptr(hwnd);
             pressed.add(vk);
         } else {
             pressed.delete(vk);
+
+            if (pressed.size === 0) {
+                keyboardHwnd = null;
+            }
         }
     },
 
     releaseall() {
         pressed.clear();
+        keyboardHwnd = null;
     }
 };
 
@@ -182,10 +191,10 @@ class FridaManager:
 
             return script
 
-    def set_key(self, pid, vk, down):
+    def set_key(self, pid, hwnd, vk, down):
         with self.lock:
             script = self.attach(pid)
-            script.exports_sync.setkey(vk, down)
+            script.exports_sync.setkey(hwnd, vk, down)
 
     def set_cursor(self, pid, hwnd, sx, sy, cx, cy):
         with self.lock:

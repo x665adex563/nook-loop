@@ -23,8 +23,12 @@ user32.ClientToScreen.argtypes = [
 
 user32.ClientToScreen.restype = wintypes.BOOL
 
+WM_ACTIVATE = 0x0006
+WA_ACTIVE = 0x01
+
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
+WM_CHAR = 0x0102
 
 WM_MOUSEMOVE = 0x0200
 WM_LBUTTONDOWN = 0x0201
@@ -101,9 +105,12 @@ class BackgroundInput:
 
             keys = resolve_keys(key)
 
+            if user32.GetForegroundWindow() != hwnd:
+                post_message(hwnd, WM_ACTIVATE, WA_ACTIVE, 0)
+
             def release_key(vk, up_param):
                 try:
-                    self.frida.set_key(pid, vk, False)
+                    self.frida.set_key(pid, hwnd, vk, False)
                 finally:
                     post_message(
                         hwnd, WM_KEYUP, vk, up_param
@@ -126,7 +133,7 @@ class BackgroundInput:
                         down_param | (1 << 30) | (1 << 31)
                     )
 
-                    self.frida.set_key(pid, vk, True)
+                    self.frida.set_key(pid, hwnd, vk, True)
 
                     stack.callback(
                         release_key, vk, up_param
@@ -135,6 +142,15 @@ class BackgroundInput:
                     post_message(
                         hwnd, WM_KEYDOWN, vk, down_param
                     )
+
+                    if (
+                        0x30 <= vk <= 0x39 or
+                        0x41 <= vk <= 0x5A or
+                        vk == 0x20
+                    ):
+                        post_message(
+                            hwnd, WM_CHAR, vk, down_param
+                        )
 
                 stop_event.wait(hold_ms / 1000)
 
