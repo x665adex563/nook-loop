@@ -343,6 +343,16 @@ class App:
         )
 
         style.configure(
+            "Note.TEntry",
+            foreground=self.colors["foreground"]
+        )
+
+        style.configure(
+            "NotePlaceholder.TEntry",
+            foreground=self.colors["muted"]
+        )
+
+        style.configure(
             "TCombobox",
             padding=(4, 3)
         )
@@ -432,6 +442,10 @@ class App:
         self.tree.column(
             "delete",
             width=delete_width
+        )
+
+        self.root.after_idle(
+            self.align_command_fields
         )
 
     def build_toolbar(self, parent):
@@ -1853,6 +1867,10 @@ class App:
         ):
             self.create_command_row(index, command)
 
+        self.root.after_idle(
+            self.align_command_fields
+        )
+
     def create_command_row(self, index, command):
         row = ttk.Frame(
             self.commands,
@@ -1909,11 +1927,20 @@ class App:
             command=lambda: self.delete_command(index)
         ).pack(side=tk.RIGHT, padx=1)
 
-        fields = ttk.Frame(row)
-        fields.pack(
+        content = ttk.Frame(row)
+        content.pack(
             side=tk.LEFT,
             fill=tk.X,
             expand=True
+        )
+
+        content.columnconfigure(1, weight=1)
+
+        fields = ttk.Frame(content)
+        fields.grid(
+            row=0,
+            column=0,
+            sticky="w"
         )
 
         if command["type"] == "key":
@@ -1956,6 +1983,94 @@ class App:
                 scale=1000
             )
 
+        self.create_note_field(
+            content, command
+        ).grid(
+            row=0,
+            column=1,
+            sticky="ew",
+            padx=(8, 5)
+        )
+
+    def align_command_fields(self):
+        self.root.update_idletasks()
+
+        contents = []
+
+        for row in self.commands.winfo_children():
+            for widget in row.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    fields = widget.grid_slaves(
+                        row=0,
+                        column=0
+                    )
+
+                    if fields:
+                        contents.append(
+                            (widget, fields[0])
+                        )
+
+        if not contents:
+            return
+
+        width = max(
+            fields.winfo_reqwidth()
+            for content, fields in contents
+        )
+
+        for content, fields in contents:
+            content.columnconfigure(
+                0,
+                minsize=width
+            )
+
+    def create_note_field(self, parent, command):
+        variable = tk.StringVar(
+            value=command.get("note", "")
+        )
+
+        entry = ttk.Entry(
+            parent,
+            textvariable=variable,
+            style="Note.TEntry",
+            width=8
+        )
+
+        placeholder = ttk.Label(
+            entry,
+            text="備註",
+            foreground=self.colors["muted"],
+            background=ttk.Style().lookup(
+                "TEntry", "fieldbackground"
+            )
+        )
+
+        def update_placeholder(event=None):
+            if not variable.get() and entry.focus_get() != entry:
+                placeholder.place(x=5, rely=0.5, anchor="w")
+            else:
+                placeholder.place_forget()
+
+        def save_note(*args):
+            command["note"] = variable.get()
+            self.save_current()
+            update_placeholder()
+
+        def focus_entry(event=None):
+            entry.focus_set()
+            placeholder.place_forget()
+
+        placeholder.bind("<Button-1>", focus_entry)
+
+        entry.bind("<FocusIn>", update_placeholder)
+        entry.bind("<FocusOut>", update_placeholder)
+
+        variable.trace_add("write", save_note)
+
+        update_placeholder()
+
+        return entry
+
     def create_key_field(self, parent, command):
         ttk.Label(
             parent,
@@ -1971,6 +2086,8 @@ class App:
             command.get("key", ""),
             save_key
         )
+
+        entry.configure(width=7)
 
         entry.pack(side=tk.LEFT, padx=5)
 
@@ -2190,6 +2307,8 @@ class App:
         }
 
         command = defaults[self.kind_var.get()]
+
+        command["note"] = ""
 
         self.current_data["commands"].append(command)
 
