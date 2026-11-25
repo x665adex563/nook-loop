@@ -253,4 +253,22 @@ def apply_titlebar_theme(root, theme):
         )
 
         if result == 0:
+            user32 = ctypes.windll.user32
+
+            WM_NCACTIVATE = 0x0086
+
+            user32.SendMessageW(
+                wintypes.HWND(hwnd),
+                WM_NCACTIVATE,
+                0,
+                0
+            )
+
+            user32.SendMessageW(
+                wintypes.HWND(hwnd),
+                WM_NCACTIVATE,
+                1,
+                0
+            )
+
             break
