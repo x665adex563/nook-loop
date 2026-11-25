@@ -2675,8 +2675,6 @@ class App:
 
         macro = self.current_data
 
-        hotkey = macro.get("hotkey", "")
-
         running = self.runner.is_macro_running(
             self.current_path
         )
@@ -2697,7 +2695,7 @@ class App:
         text = "停止" if running else "執行"
 
         self.macro_start_button.config(
-            text=f"{text} [{hotkey}]" if hotkey and enabled else text,
+            text=text,
             state="normal",
             background=self.colors["green"][0],
             cursor="hand2"
