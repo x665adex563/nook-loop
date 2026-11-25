@@ -833,21 +833,6 @@ class App:
 
         self.add_command_button.pack(side=tk.LEFT)
 
-        self.macro_hotkey_button = ttk.Button(
-            command_header,
-            text="✎",
-            width=3,
-            command=self.configure_macro_hotkey,
-            state="disabled"
-        )
-
-        self.macro_hotkey_button.pack(side=tk.RIGHT)
-
-        self.add_tooltip(
-            self.macro_hotkey_button,
-            "更改快捷鍵"
-        )
-
         self.macro_start_button = self.create_colored_button(
             command_header,
             color="green",
@@ -1273,10 +1258,7 @@ class App:
                 path.is_file()
                 and self.is_hotkey_click(iid, event.x)
             ):
-                self.configure_macro_hotkey(
-                    path=path,
-                    inline=True
-                )
+                self.configure_macro_hotkey(path)
 
                 return "break"
 
@@ -2440,9 +2422,7 @@ class App:
 
         return errors
 
-    def configure_macro_hotkey(
-        self, path=None, inline=False
-    ):
+    def configure_macro_hotkey(self, path):
         if self.runner.is_running():
             return
 
@@ -2450,18 +2430,15 @@ class App:
             self.root.focus_set()
             return
 
-        path = path or self.current_path
-
         if not path or not path.is_file():
             return
 
-        if inline:
-            bounds = self.tree.bbox(
-                str(path), "hotkey"
-            )
+        bounds = self.tree.bbox(
+            str(path), "hotkey"
+        )
 
-            if not bounds:
-                return
+        if not bounds:
+            return
 
         macro = self.manager.load_macro(path)
         old = macro.get("hotkey", "")
@@ -2470,15 +2447,12 @@ class App:
 
         self.hotkey.stop()
 
-        if not inline:
-            self.macro_start_button.pack_forget()
-
         def receive_key(key):
             nonlocal value
             value = key
 
         entry = self.create_key_capture(
-            self.tree if inline else self.command_header,
+            self.tree,
             "",
             receive_key
         )
@@ -2490,21 +2464,14 @@ class App:
             width=18
         )
 
-        if inline:
-            x, y, width, height = bounds
+        x, y, width, height = bounds
 
-            entry.place(
-                x=x,
-                y=y,
-                width=width,
-                height=height
-            )
-        else:
-            entry.pack(
-                side=tk.RIGHT,
-                padx=(0, 5),
-                after=self.macro_hotkey_button
-            )
+        entry.place(
+            x=x,
+            y=y,
+            width=width,
+            height=height
+        )
 
         finished = False
         click_binding = None
@@ -2528,13 +2495,6 @@ class App:
 
             self.macro_hotkey_entry = None
             entry.destroy()
-
-            if not inline:
-                self.macro_start_button.pack(
-                    side=tk.RIGHT,
-                    padx=(0, 5),
-                    after=self.macro_hotkey_button
-                )
 
             try:
                 if value:
@@ -2661,10 +2621,6 @@ class App:
                 cursor="arrow"
             )
 
-            self.macro_hotkey_button.config(
-                state="disabled"
-            )
-
             self.macro_status_light.delete("all")
 
             self.macro_status_light.configure(
@@ -2699,11 +2655,6 @@ class App:
             state="normal",
             background=self.colors["green"][0],
             cursor="hand2"
-        )
-
-        self.macro_hotkey_button.config(
-            state="disabled" if self.runner.is_running()
-            else "normal"
         )
 
     def update_tree_separators(self):
