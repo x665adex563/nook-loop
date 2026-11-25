@@ -949,13 +949,12 @@ class App:
     def on_editor_blank_click(self, event):
         self.root.focus_set()
 
-        self.tree.selection_remove(
-            *self.tree.selection()
-        )
-
-        self.tree.focus("")
-
-        self.clear_selection()
+        for combo in (
+            self.window_combo,
+            self.mode_combo,
+            self.kind_combo
+        ):
+            combo.selection_clear()
 
         return "break"
 
