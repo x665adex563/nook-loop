@@ -262,6 +262,13 @@ class App:
         self.update_log_theme()
         self.update_combobox_theme()
 
+        for row in self.commands.winfo_children():
+            for widget in row.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    widget.configure(
+                        background=self.colors["separator"]
+                    )
+
         self.tree.tag_configure(
             "drop_target",
             background=self.colors["drop_target"]
@@ -331,6 +338,29 @@ class App:
             )
 
         style = ttk.Style()
+
+        style.configure(
+            "CommandMuted.TLabel",
+            foreground=self.colors["muted"]
+        )
+
+        style.configure(
+            "CommandDelete.TButton",
+            background=self.colors["background"],
+            foreground=self.colors["muted"],
+            borderwidth=0,
+            relief="flat"
+        )
+
+        style.map(
+            "CommandDelete.TButton",
+            background=[
+                ("active", self.colors["surface"])
+            ],
+            foreground=[
+                ("active", self.colors["foreground"])
+            ]
+        )
 
         style.configure(
             ".",
@@ -446,6 +476,20 @@ class App:
 
         self.root.after_idle(
             self.align_command_fields
+        )
+
+        style.configure(
+            "Command.TEntry",
+            bordercolor=self.colors["separator"],
+            lightcolor=self.colors["separator"],
+            darkcolor=self.colors["separator"]
+        )
+
+        style.configure(
+            "Note.TEntry",
+            bordercolor=self.colors["separator"],
+            lightcolor=self.colors["separator"],
+            darkcolor=self.colors["separator"]
         )
 
     def build_toolbar(self, parent):
@@ -1874,16 +1918,27 @@ class App:
     def create_command_row(self, index, command):
         row = ttk.Frame(
             self.commands,
-            padding=5,
-            relief="solid",
-            borderwidth=1
+            padding=(5, 4)
         )
 
-        row.pack(fill=tk.X, pady=3)
+        row.pack(fill=tk.X, pady=1)
+
+        tk.Frame(
+            row,
+            background=self.colors["separator"],
+            height=1,
+            borderwidth=0,
+            highlightthickness=0
+        ).pack(
+            side=tk.BOTTOM,
+            fill=tk.X,
+            pady=(5, 0)
+        )
 
         handle = ttk.Label(
             row,
-            text="☰",
+            text="⠿",
+            style="CommandMuted.TLabel",
             cursor="fleur",
             width=3,
             anchor="center"
@@ -1924,6 +1979,8 @@ class App:
             row,
             text="×",
             width=3,
+            style="CommandDelete.TButton",
+            cursor="hand2",
             command=lambda: self.delete_command(index)
         ).pack(side=tk.RIGHT, padx=1)
 
@@ -1950,7 +2007,7 @@ class App:
                 fields,
                 command,
                 "hold_ms",
-                "按住時間",
+                "",
                 "ms"
             )
 
@@ -1978,7 +2035,7 @@ class App:
                 fields,
                 command,
                 "seconds",
-                "等待時間",
+                "",
                 "ms",
                 scale=1000
             )
@@ -2072,11 +2129,6 @@ class App:
         return entry
 
     def create_key_field(self, parent, command):
-        ttk.Label(
-            parent,
-            text="按鍵"
-        ).pack(side=tk.LEFT)
-
         def save_key(key):
             command["key"] = key
             self.save_current()
@@ -2087,7 +2139,10 @@ class App:
             save_key
         )
 
-        entry.configure(width=7)
+        entry.configure(
+            width=7,
+            style="Command.TEntry"
+        )
 
         entry.pack(side=tk.LEFT, padx=5)
 
@@ -2220,10 +2275,11 @@ class App:
         key, label, unit="", integer=False,
         scale=1
     ):
-        ttk.Label(
-            parent,
-            text=label
-        ).pack(side=tk.LEFT)
+        if label:
+            ttk.Label(
+                parent,
+                text=label
+            ).pack(side=tk.LEFT)
 
         def display_value():
             value = command.get(key, 0) * scale
@@ -2237,6 +2293,7 @@ class App:
             parent,
             textvariable=variable,
             width=6,
+            style="Command.TEntry",
             justify="center"
         )
 
