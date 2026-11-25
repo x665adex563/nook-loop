@@ -8,6 +8,28 @@ const pressed = new Set();
 let cursorPosition = null;
 let cursorTimer = null;
 let keyboardHwnd = null;
+let targetHwnd = null;
+let checkingForeground = false;
+
+const getForegroundWindow = new NativeFunction(
+    user32.getExportByName("GetForegroundWindow"),
+    "pointer",
+    []
+);
+
+function isTargetBackground() {
+    if (targetHwnd === null) {
+        return false;
+    }
+
+    checkingForeground = true;
+
+    try {
+        return !getForegroundWindow().equals(targetHwnd);
+    } finally {
+        checkingForeground = false;
+    }
+}
 
 for (const name of [
     "GetForegroundWindow",
@@ -16,6 +38,10 @@ for (const name of [
 ]) {
     Interceptor.attach(user32.getExportByName(name), {
         onLeave(retval) {
+            if (checkingForeground) {
+                return;
+            }
+
             if (keyboardHwnd !== null && pressed.size > 0) {
                 retval.replace(keyboardHwnd);
             } else if (cursorPosition !== null) {
@@ -88,8 +114,35 @@ Interceptor.attach(user32.getExportByName("GetKeyboardState"), {
     }
 });
 
+const setCursorPosAddress = user32.findExportByName("SetCursorPos");
+
+if (setCursorPosAddress !== null) {
+    const originalSetCursorPos = new NativeFunction(
+        setCursorPosAddress,
+        "int",
+        ["int", "int"]
+    );
+
+    Interceptor.replace(
+        setCursorPosAddress,
+        new NativeCallback(
+            function (x, y) {
+                if (isTargetBackground()) {
+                    return 1;
+                }
+
+                return originalSetCursorPos(x, y);
+            },
+            "int",
+            ["int", "int"]
+        )
+    );
+}
+
 rpc.exports = {
 setcursor(hwnd, sx, sy, cx, cy) {
+    targetHwnd = ptr(hwnd);
+
     cursorPosition = {
         hwnd: ptr(hwnd),
         x: sx,
@@ -109,6 +162,8 @@ setcursor(hwnd, sx, sy, cx, cy) {
 },
 
     setkey(hwnd, vk, down) {
+        targetHwnd = ptr(hwnd);
+
         if (down) {
             keyboardHwnd = ptr(hwnd);
             pressed.add(vk);
@@ -124,6 +179,7 @@ setcursor(hwnd, sx, sy, cx, cy) {
     releaseall() {
         pressed.clear();
         keyboardHwnd = null;
+        targetHwnd = null;
     }
 };
 
