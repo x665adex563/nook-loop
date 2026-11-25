@@ -262,6 +262,13 @@ class App:
         self.update_log_theme()
         self.update_combobox_theme()
 
+        for row in self.commands.winfo_children():
+            for widget in row.winfo_children():
+                if isinstance(widget, tk.Frame):
+                    widget.configure(
+                        background=self.colors["separator"]
+                    )
+
         self.tree.tag_configure(
             "drop_target",
             background=self.colors["drop_target"]
@@ -333,6 +340,29 @@ class App:
         style = ttk.Style()
 
         style.configure(
+            "CommandMuted.TLabel",
+            foreground=self.colors["muted"]
+        )
+
+        style.configure(
+            "CommandDelete.TButton",
+            background=self.colors["background"],
+            foreground=self.colors["muted"],
+            borderwidth=0,
+            relief="flat"
+        )
+
+        style.map(
+            "CommandDelete.TButton",
+            background=[
+                ("active", self.colors["surface"])
+            ],
+            foreground=[
+                ("active", self.colors["foreground"])
+            ]
+        )
+
+        style.configure(
             ".",
             font=("Microsoft JhengHei", size)
         )
@@ -340,6 +370,16 @@ class App:
         style.configure(
             "TEntry",
             padding=(4, 3)
+        )
+
+        style.configure(
+            "Note.TEntry",
+            foreground=self.colors["foreground"]
+        )
+
+        style.configure(
+            "NotePlaceholder.TEntry",
+            foreground=self.colors["muted"]
         )
 
         style.configure(
@@ -432,6 +472,24 @@ class App:
         self.tree.column(
             "delete",
             width=delete_width
+        )
+
+        self.root.after_idle(
+            self.align_command_fields
+        )
+
+        style.configure(
+            "Command.TEntry",
+            bordercolor=self.colors["separator"],
+            lightcolor=self.colors["separator"],
+            darkcolor=self.colors["separator"]
+        )
+
+        style.configure(
+            "Note.TEntry",
+            bordercolor=self.colors["separator"],
+            lightcolor=self.colors["separator"],
+            darkcolor=self.colors["separator"]
         )
 
     def build_toolbar(self, parent):
@@ -833,21 +891,6 @@ class App:
 
         self.add_command_button.pack(side=tk.LEFT)
 
-        self.macro_hotkey_button = ttk.Button(
-            command_header,
-            text="✎",
-            width=3,
-            command=self.configure_macro_hotkey,
-            state="disabled"
-        )
-
-        self.macro_hotkey_button.pack(side=tk.RIGHT)
-
-        self.add_tooltip(
-            self.macro_hotkey_button,
-            "更改快捷鍵"
-        )
-
         self.macro_start_button = self.create_colored_button(
             command_header,
             color="green",
@@ -964,13 +1007,12 @@ class App:
     def on_editor_blank_click(self, event):
         self.root.focus_set()
 
-        self.tree.selection_remove(
-            *self.tree.selection()
-        )
-
-        self.tree.focus("")
-
-        self.clear_selection()
+        for combo in (
+            self.window_combo,
+            self.mode_combo,
+            self.kind_combo
+        ):
+            combo.selection_clear()
 
         return "break"
 
@@ -1273,10 +1315,7 @@ class App:
                 path.is_file()
                 and self.is_hotkey_click(iid, event.x)
             ):
-                self.configure_macro_hotkey(
-                    path=path,
-                    inline=True
-                )
+                self.configure_macro_hotkey(path)
 
                 return "break"
 
@@ -1872,19 +1911,34 @@ class App:
         ):
             self.create_command_row(index, command)
 
+        self.root.after_idle(
+            self.align_command_fields
+        )
+
     def create_command_row(self, index, command):
         row = ttk.Frame(
             self.commands,
-            padding=5,
-            relief="solid",
-            borderwidth=1
+            padding=(5, 4)
         )
 
-        row.pack(fill=tk.X, pady=3)
+        row.pack(fill=tk.X, pady=1)
+
+        tk.Frame(
+            row,
+            background=self.colors["separator"],
+            height=1,
+            borderwidth=0,
+            highlightthickness=0
+        ).pack(
+            side=tk.BOTTOM,
+            fill=tk.X,
+            pady=(5, 0)
+        )
 
         handle = ttk.Label(
             row,
-            text="☰",
+            text="⠿",
+            style="CommandMuted.TLabel",
             cursor="fleur",
             width=3,
             anchor="center"
@@ -1925,14 +1979,25 @@ class App:
             row,
             text="×",
             width=3,
+            style="CommandDelete.TButton",
+            cursor="hand2",
             command=lambda: self.delete_command(index)
         ).pack(side=tk.RIGHT, padx=1)
 
-        fields = ttk.Frame(row)
-        fields.pack(
+        content = ttk.Frame(row)
+        content.pack(
             side=tk.LEFT,
             fill=tk.X,
             expand=True
+        )
+
+        content.columnconfigure(1, weight=1)
+
+        fields = ttk.Frame(content)
+        fields.grid(
+            row=0,
+            column=0,
+            sticky="w"
         )
 
         if command["type"] == "key":
@@ -1942,7 +2007,7 @@ class App:
                 fields,
                 command,
                 "hold_ms",
-                "按住時間",
+                "",
                 "ms"
             )
 
@@ -1970,17 +2035,100 @@ class App:
                 fields,
                 command,
                 "seconds",
-                "等待時間",
+                "",
                 "ms",
                 scale=1000
             )
 
-    def create_key_field(self, parent, command):
-        ttk.Label(
-            parent,
-            text="按鍵"
-        ).pack(side=tk.LEFT)
+        self.create_note_field(
+            content, command
+        ).grid(
+            row=0,
+            column=1,
+            sticky="ew",
+            padx=(8, 5)
+        )
 
+    def align_command_fields(self):
+        self.root.update_idletasks()
+
+        contents = []
+
+        for row in self.commands.winfo_children():
+            for widget in row.winfo_children():
+                if isinstance(widget, ttk.Frame):
+                    fields = widget.grid_slaves(
+                        row=0,
+                        column=0
+                    )
+
+                    if fields:
+                        contents.append(
+                            (widget, fields[0])
+                        )
+
+        if not contents:
+            return
+
+        width = max(
+            fields.winfo_reqwidth()
+            for content, fields in contents
+        )
+
+        for content, fields in contents:
+            content.columnconfigure(
+                0,
+                minsize=width
+            )
+
+    def create_note_field(self, parent, command):
+        variable = tk.StringVar(
+            value=command.get("note", "")
+        )
+
+        entry = ttk.Entry(
+            parent,
+            textvariable=variable,
+            style="Note.TEntry",
+            width=8
+        )
+
+        placeholder = ttk.Label(
+            entry,
+            text="備註",
+            foreground=self.colors["muted"],
+            background=ttk.Style().lookup(
+                "TEntry", "fieldbackground"
+            )
+        )
+
+        def update_placeholder(event=None):
+            if not variable.get() and entry.focus_get() != entry:
+                placeholder.place(x=5, rely=0.5, anchor="w")
+            else:
+                placeholder.place_forget()
+
+        def save_note(*args):
+            command["note"] = variable.get()
+            self.save_current()
+            update_placeholder()
+
+        def focus_entry(event=None):
+            entry.focus_set()
+            placeholder.place_forget()
+
+        placeholder.bind("<Button-1>", focus_entry)
+
+        entry.bind("<FocusIn>", update_placeholder)
+        entry.bind("<FocusOut>", update_placeholder)
+
+        variable.trace_add("write", save_note)
+
+        update_placeholder()
+
+        return entry
+
+    def create_key_field(self, parent, command):
         def save_key(key):
             command["key"] = key
             self.save_current()
@@ -1989,6 +2137,11 @@ class App:
             parent,
             command.get("key", ""),
             save_key
+        )
+
+        entry.configure(
+            width=7,
+            style="Command.TEntry"
         )
 
         entry.pack(side=tk.LEFT, padx=5)
@@ -2122,10 +2275,11 @@ class App:
         key, label, unit="", integer=False,
         scale=1
     ):
-        ttk.Label(
-            parent,
-            text=label
-        ).pack(side=tk.LEFT)
+        if label:
+            ttk.Label(
+                parent,
+                text=label
+            ).pack(side=tk.LEFT)
 
         def display_value():
             value = command.get(key, 0) * scale
@@ -2139,6 +2293,7 @@ class App:
             parent,
             textvariable=variable,
             width=6,
+            style="Command.TEntry",
             justify="center"
         )
 
@@ -2209,6 +2364,8 @@ class App:
         }
 
         command = defaults[self.kind_var.get()]
+
+        command["note"] = ""
 
         self.current_data["commands"].append(command)
 
@@ -2418,10 +2575,19 @@ class App:
         hotkeys = []
         errors = []
 
-        for macro in self.manager.get_enabled_macros().values():
-            hotkeys.append(
-                macro.get("hotkey", "")
-            )
+        running_paths = self.runner.get_running_paths()
+        self.registered_running_paths = running_paths
+
+        for path in self.manager.get_all_macros():
+            macro = self.manager.load_macro(path)
+
+            if (
+                macro.get("enabled", False)
+                or path.resolve() in running_paths
+            ):
+                hotkeys.append(
+                    macro.get("hotkey", "")
+                )
 
         try:
             errors = self.hotkey.start(hotkeys)
@@ -2440,9 +2606,7 @@ class App:
 
         return errors
 
-    def configure_macro_hotkey(
-        self, path=None, inline=False
-    ):
+    def configure_macro_hotkey(self, path):
         if self.runner.is_running():
             return
 
@@ -2450,18 +2614,15 @@ class App:
             self.root.focus_set()
             return
 
-        path = path or self.current_path
-
         if not path or not path.is_file():
             return
 
-        if inline:
-            bounds = self.tree.bbox(
-                str(path), "hotkey"
-            )
+        bounds = self.tree.bbox(
+            str(path), "hotkey"
+        )
 
-            if not bounds:
-                return
+        if not bounds:
+            return
 
         macro = self.manager.load_macro(path)
         old = macro.get("hotkey", "")
@@ -2470,15 +2631,12 @@ class App:
 
         self.hotkey.stop()
 
-        if not inline:
-            self.macro_start_button.pack_forget()
-
         def receive_key(key):
             nonlocal value
             value = key
 
         entry = self.create_key_capture(
-            self.tree if inline else self.command_header,
+            self.tree,
             "",
             receive_key
         )
@@ -2490,21 +2648,14 @@ class App:
             width=18
         )
 
-        if inline:
-            x, y, width, height = bounds
+        x, y, width, height = bounds
 
-            entry.place(
-                x=x,
-                y=y,
-                width=width,
-                height=height
-            )
-        else:
-            entry.pack(
-                side=tk.RIGHT,
-                padx=(0, 5),
-                after=self.macro_hotkey_button
-            )
+        entry.place(
+            x=x,
+            y=y,
+            width=width,
+            height=height
+        )
 
         finished = False
         click_binding = None
@@ -2528,13 +2679,6 @@ class App:
 
             self.macro_hotkey_entry = None
             entry.destroy()
-
-            if not inline:
-                self.macro_start_button.pack(
-                    side=tk.RIGHT,
-                    padx=(0, 5),
-                    after=self.macro_hotkey_button
-                )
 
             try:
                 if value:
@@ -2619,6 +2763,8 @@ class App:
 
             self.runner.start_macro(path, macro)
 
+            self.register_hotkey()
+
         self.update_status()
 
     def handle_hotkey(self, hotkey):
@@ -2627,16 +2773,18 @@ class App:
 
         binding = self.hotkey.parse(hotkey)
 
-        macros = self.manager.get_enabled_macros()
+        matched = {}
 
-        matched = {
-            path: macro
-            for path, macro in macros.items()
-            if macro.get("hotkey")
-            and self.hotkey.parse(
-                macro["hotkey"]
-            ) == binding
-        }
+        for path in self.manager.get_all_macros():
+            macro = self.manager.load_macro(path)
+
+            if (
+                macro.get("hotkey")
+                and self.hotkey.parse(
+                    macro["hotkey"]
+                ) == binding
+            ):
+                matched[path] = macro
 
         running = [
             path for path in matched
@@ -2648,7 +2796,13 @@ class App:
                 self.runner.stop_macro(path)
 
         else:
-            self.runner.start(matched)
+            enabled = {
+                path: macro
+                for path, macro in matched.items()
+                if macro.get("enabled", False)
+            }
+
+            self.runner.start(enabled)
 
         self.update_status()
 
@@ -2661,10 +2815,6 @@ class App:
                 cursor="arrow"
             )
 
-            self.macro_hotkey_button.config(
-                state="disabled"
-            )
-
             self.macro_status_light.delete("all")
 
             self.macro_status_light.configure(
@@ -2674,8 +2824,6 @@ class App:
             return
 
         macro = self.current_data
-
-        hotkey = macro.get("hotkey", "")
 
         running = self.runner.is_macro_running(
             self.current_path
@@ -2697,15 +2845,10 @@ class App:
         text = "停止" if running else "執行"
 
         self.macro_start_button.config(
-            text=f"{text} [{hotkey}]" if hotkey and enabled else text,
+            text=text,
             state="normal",
             background=self.colors["green"][0],
             cursor="hand2"
-        )
-
-        self.macro_hotkey_button.config(
-            state="disabled" if self.runner.is_running()
-            else "normal"
         )
 
     def update_tree_separators(self):
@@ -2922,10 +3065,22 @@ class App:
         except Empty:
             pass
 
+        if (
+            not getattr(self, "closing", False)
+            and self.macro_hotkey_entry is None
+        ):
+            if (
+                self.runner.get_running_paths()
+                != getattr(self, "registered_running_paths", set())
+            ):
+                self.register_hotkey()
+
         self.update_status()
         self.root.after(100, self.process_events)
 
     def close(self):
+        self.closing = True
+
         self.hotkey.stop()
         self.runner.stop()
 

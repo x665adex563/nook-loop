@@ -6,7 +6,7 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 MACROS_DIR = DATA_DIR / "macros"
 CONFIG_PATH = DATA_DIR / "config.json"
-
+DEFAULT_CONFIG_PATH = DATA_DIR / "config.default.json"
 
 class MacroManager:
     def __init__(self):
@@ -240,10 +240,10 @@ class MacroManager:
         return macros
 
     def load_config(self):
-        if not CONFIG_PATH.exists():
-            return {}
+        if CONFIG_PATH.exists():
+            return self.load(CONFIG_PATH)
 
-        return self.load(CONFIG_PATH)
+        return self.load(DEFAULT_CONFIG_PATH)
 
     def save_config(self, config):
         self.save(CONFIG_PATH, config)
