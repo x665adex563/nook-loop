@@ -3,6 +3,14 @@ from tkinter import ttk
 from ctypes import wintypes
 
 LIGHT = {
+    "background": "#F0F0F0",
+    "sidebar": "#FFFFFF",
+    "surface": "#E5E5E5",
+    "input": "#FFFFFF",
+    "border": "#CCCCCC",
+    "foreground": "#333333",
+    "muted": "#808080",
+    "selection": "#CCE4F7",
     "separator": "#E5E5E5",
     "drop_target": "#C8E6C9",
     "placeholder": "#D9D9D9",
