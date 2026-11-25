@@ -212,6 +212,10 @@ class MacroRunner:
         with self.lock:
             return path in self.tasks
 
+    def get_running_paths(self):
+        with self.lock:
+            return set(self.tasks)
+
     def is_running(self):
         with self.lock:
             return bool(self.tasks)

@@ -2575,10 +2575,19 @@ class App:
         hotkeys = []
         errors = []
 
-        for macro in self.manager.get_enabled_macros().values():
-            hotkeys.append(
-                macro.get("hotkey", "")
-            )
+        running_paths = self.runner.get_running_paths()
+        self.registered_running_paths = running_paths
+
+        for path in self.manager.get_all_macros():
+            macro = self.manager.load_macro(path)
+
+            if (
+                macro.get("enabled", False)
+                or path.resolve() in running_paths
+            ):
+                hotkeys.append(
+                    macro.get("hotkey", "")
+                )
 
         try:
             errors = self.hotkey.start(hotkeys)
@@ -2754,6 +2763,8 @@ class App:
 
             self.runner.start_macro(path, macro)
 
+            self.register_hotkey()
+
         self.update_status()
 
     def handle_hotkey(self, hotkey):
@@ -2762,16 +2773,18 @@ class App:
 
         binding = self.hotkey.parse(hotkey)
 
-        macros = self.manager.get_enabled_macros()
+        matched = {}
 
-        matched = {
-            path: macro
-            for path, macro in macros.items()
-            if macro.get("hotkey")
-            and self.hotkey.parse(
-                macro["hotkey"]
-            ) == binding
-        }
+        for path in self.manager.get_all_macros():
+            macro = self.manager.load_macro(path)
+
+            if (
+                macro.get("hotkey")
+                and self.hotkey.parse(
+                    macro["hotkey"]
+                ) == binding
+            ):
+                matched[path] = macro
 
         running = [
             path for path in matched
@@ -2783,7 +2796,13 @@ class App:
                 self.runner.stop_macro(path)
 
         else:
-            self.runner.start(matched)
+            enabled = {
+                path: macro
+                for path, macro in matched.items()
+                if macro.get("enabled", False)
+            }
+
+            self.runner.start(enabled)
 
         self.update_status()
 
@@ -3046,10 +3065,22 @@ class App:
         except Empty:
             pass
 
+        if (
+            not getattr(self, "closing", False)
+            and self.macro_hotkey_entry is None
+        ):
+            if (
+                self.runner.get_running_paths()
+                != getattr(self, "registered_running_paths", set())
+            ):
+                self.register_hotkey()
+
         self.update_status()
         self.root.after(100, self.process_events)
 
     def close(self):
+        self.closing = True
+
         self.hotkey.stop()
         self.runner.stop()
 
