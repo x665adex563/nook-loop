@@ -42,15 +42,10 @@ class MacroRunner:
             stop_event = threading.Event()
 
             thread = threading.Thread(
-                target=self._run_task,
-                args=(path, macro, stop_event),
-                daemon=True
+                target=self._run_task, args=(path, macro, stop_event), daemon=True
             )
 
-            self.tasks[path] = {
-                "thread": thread,
-                "stop_event": stop_event
-            }
+            self.tasks[path] = {"thread": thread, "stop_event": stop_event}
 
             thread.start()
 
@@ -76,14 +71,10 @@ class MacroRunner:
         name = macro["name"]
 
         try:
-            window = find_window(
-                macro.get("window_title", "")
-            )
+            window = find_window(macro.get("window_title", ""))
 
             if window is None:
-                raise RuntimeError(
-                    "找不到唯一的目標視窗"
-                )
+                raise RuntimeError("找不到唯一的目標視窗")
 
             hwnd = window["hwnd"]
             pid = window["pid"]
@@ -96,44 +87,51 @@ class MacroRunner:
                 self.log(f"{name}：沒有指令，已跳過")
                 return
 
-            if mode not in ("once", "interval", "loop"):
+            if mode not in ("once", "interval", "loop", "timed"):
                 raise ValueError("無效的執行方式")
+
+            timer = None
+
+            if mode == "timed":
+                duration = self._duration(repeat.get("interval", 30))
+
+                timer = threading.Timer(duration, stop_event.set)
 
             self.log(f"{name}：開始執行")
 
-            while not stop_event.is_set():
-                for command in commands:
+            if timer:
+                timer.start()
+
+            try:
+                while not stop_event.is_set():
+                    for command in commands:
+                        if stop_event.is_set():
+                            break
+
+                        if not is_window(hwnd):
+                            raise RuntimeError("目標視窗已關閉")
+
+                        self._execute_command(hwnd, pid, command, stop_event)
+
                     if stop_event.is_set():
                         break
 
-                    if not is_window(hwnd):
-                        raise RuntimeError("目標視窗已關閉")
+                    if mode == "once":
+                        break
 
-                    self._execute_command(
-                        hwnd, pid, command, stop_event
-                    )
+                    if mode == "interval":
+                        interval = self._duration(repeat.get("interval", 30))
 
-                if stop_event.is_set():
-                    break
+                        stop_event.wait(interval)
 
-                if mode == "once":
-                    break
+                    elif mode in ("loop", "timed"):
+                        stop_event.wait(0.01)
 
-                if mode == "interval":
-                    interval = self._duration(
-                        repeat.get("interval", 30)
-                    )
+            finally:
+                if timer:
+                    timer.cancel()
 
-                    stop_event.wait(interval)
-
-                elif mode == "loop":
-                    stop_event.wait(0.01)
-
-            status = (
-                "已停止"
-                if stop_event.is_set()
-                else "執行完成"
-            )
+            status = "已停止" if stop_event.is_set() else "執行完成"
 
             self.log(f"{name}：{status}")
 
@@ -148,9 +146,7 @@ class MacroRunner:
 
         return value
 
-    def _execute_command(
-        self, hwnd, pid, command, stop_event
-    ):
+    def _execute_command(self, hwnd, pid, command, stop_event):
         command_type = command["type"]
 
         if command_type == "key":
@@ -158,30 +154,20 @@ class MacroRunner:
                 hwnd,
                 pid,
                 command["key"],
-                self._duration(
-                    command.get("hold_ms", 120)
-                ),
-                stop_event
+                self._duration(command.get("hold_ms", 120)),
+                stop_event,
             )
 
         elif command_type == "click":
             self.bg_input.click(
-                hwnd,
-                pid,
-                int(command["x"]),
-                int(command["y"]),
-                stop_event
+                hwnd, pid, int(command["x"]), int(command["y"]), stop_event
             )
 
         elif command_type == "wait":
-            stop_event.wait(
-                self._duration(command["seconds"])
-            )
+            stop_event.wait(self._duration(command["seconds"]))
 
         else:
-            raise ValueError(
-                f"未知的指令類型：{command_type}"
-            )
+            raise ValueError(f"未知的指令類型：{command_type}")
 
     def stop_macro(self, path):
         path = Path(path).resolve()

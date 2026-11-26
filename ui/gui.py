@@ -541,6 +541,7 @@ class App:
         self.mode_options = {
             "僅執行一次": "once",
             "固定間隔重複": "interval",
+            "固定時間後停止": "timed",
             "無限循環": "loop",
         }
 
@@ -558,7 +559,7 @@ class App:
 
         self.mode_combo.bind("<<ComboboxSelected>>", self.on_mode_change)
 
-        ttk.Label(mode_row, text="每輪結束後等待").pack(side=tk.LEFT)
+        self.mode_label = ttk.Label(mode_row, text="每輪結束後等待")
 
         self.interval_var = tk.StringVar(value="30")
 
@@ -576,7 +577,9 @@ class App:
 
         self.interval_entry.bind("<Return>", self.save_settings)
 
-        ttk.Label(mode_row, text="秒").pack(side=tk.LEFT)
+        self.seconds_label = ttk.Label(mode_row, text="秒")
+
+        self.stop_label = ttk.Label(mode_row, text="後停止")
 
         command_header = ttk.Frame(self.editor_body)
         command_header.pack(fill=tk.X, pady=(5, 0))
@@ -1343,7 +1346,26 @@ class App:
     def update_interval_state(self):
         mode = self.mode_options[self.mode_var.get()]
 
-        self.interval_entry.config(state="normal" if mode == "interval" else "disabled")
+        self.mode_label.pack_forget()
+        self.interval_entry.pack_forget()
+        self.seconds_label.pack_forget()
+        self.stop_label.pack_forget()
+
+        if mode in ("interval", "timed"):
+            self.mode_label.config(text="執行" if mode == "timed" else "每輪結束後等待")
+
+            self.mode_label.pack(side=tk.LEFT)
+
+            self.interval_entry.pack(side=tk.LEFT, padx=5)
+            self.seconds_label.pack(side=tk.LEFT)
+
+            if mode == "timed":
+                self.stop_label.pack(side=tk.LEFT)
+
+            self.interval_entry.config(state="normal")
+
+        else:
+            self.interval_entry.config(state="disabled")
 
     def save_settings(self, event=None):
         if self.loading or not self.current_data:
@@ -1353,14 +1375,15 @@ class App:
             return
 
         try:
-            interval = float(self.interval_var.get())
+            interval = float(self.interval_var.get().strip())
 
             if interval < 0:
-                raise ValueError
+                interval = 0
 
         except ValueError:
-            messagebox.showerror("設定錯誤", "間隔時間必須為非負數值")
-            return
+            interval = 0
+
+        self.interval_var.set(str(int(interval) if interval.is_integer() else interval))
 
         self.current_data["window_title"] = self.window_var.get()
 
