@@ -56,6 +56,7 @@ class App:
         self.drag_target = None
 
         self.command_drag = None
+        self.range_drag = None
         self.last_running = False
 
         self.windows = []
@@ -265,6 +266,13 @@ class App:
         style = ttk.Style()
 
         style.configure("CommandMuted.TLabel", foreground=self.colors["muted"])
+
+        style.configure(
+            "RangeHandle.TLabel",
+            foreground="#4A90D9",
+            background=self.colors["surface"],
+            padding=(4, 0),
+        )
 
         style.configure(
             "CommandDelete.TButton",
@@ -595,7 +603,7 @@ class App:
         self.kind_combo = ttk.Combobox(
             command_header,
             textvariable=self.kind_var,
-            values=("鍵盤輸入", "滑鼠點擊", "等待"),
+            values=("鍵盤輸入", "滑鼠點擊", "等待", "範圍重複執行"),
             state="readonly",
             width=10,
         )
@@ -629,13 +637,11 @@ class App:
 
         self.command_canvas = tk.Canvas(command_area, highlightthickness=0)
 
-        scrollbar = ttk.Scrollbar(
+        self.command_scrollbar = ttk.Scrollbar(
             command_area, orient=tk.VERTICAL, command=self.command_canvas.yview
         )
 
-        self.command_canvas.configure(yscrollcommand=scrollbar.set)
-
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.command_canvas.configure(yscrollcommand=self.command_scrollbar.set)
 
         self.command_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -645,12 +651,9 @@ class App:
             (0, 0), window=self.commands, anchor="nw"
         )
 
-        self.commands.bind(
-            "<Configure>",
-            lambda event: self.command_canvas.configure(
-                scrollregion=self.command_canvas.bbox("all")
-            ),
-        )
+        self.commands.bind("<Configure>", self.update_command_scrollbar)
+
+        self.command_canvas.bind("<Configure>", self.update_command_scrollbar)
 
         self.command_canvas.bind(
             "<Configure>",
@@ -1394,16 +1397,45 @@ class App:
 
         self.save_current()
 
+    def update_command_scrollbar(self, event=None):
+        bbox = self.command_canvas.bbox("all")
+
+        if not bbox:
+            return
+
+        self.command_canvas.configure(scrollregion=bbox)
+
+        content_height = bbox[3] - bbox[1]
+        canvas_height = self.command_canvas.winfo_height()
+
+        if content_height > canvas_height:
+            if not self.command_scrollbar.winfo_ismapped():
+                self.command_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        else:
+            if self.command_scrollbar.winfo_ismapped():
+                self.command_scrollbar.pack_forget()
+
+            self.command_canvas.yview_moveto(0)
+
     def scroll_commands(self, event):
         widget = self.root.winfo_containing(event.x_root, event.y_root)
 
         while widget is not None:
             if widget == self.command_canvas:
-                self.command_canvas.yview_scroll(-int(event.delta / 120), "units")
+                if not self.command_scrollbar.winfo_ismapped():
+                    return "break"
 
+                self.command_canvas.yview_scroll(-int(event.delta / 120), "units")
                 return "break"
 
             widget = getattr(widget, "master", None)
+
+    def command_rows(self):
+        return [
+            widget
+            for widget in self.commands.pack_slaves()
+            if getattr(widget, "is_command_row", False)
+        ]
 
     def refresh_commands(self):
         for widget in self.commands.winfo_children():
@@ -1412,14 +1444,83 @@ class App:
         if not self.current_data:
             return
 
-        for index, command in enumerate(self.current_data["commands"]):
-            self.create_command_row(index, command)
+        commands = self.current_data["commands"]
+        rows = []
+        range_handles = []
 
+        for index, command in enumerate(commands):
+            row = self.create_command_row(index, command)
+            rows.append(row)
+
+        for index, command in enumerate(commands):
+            if command["type"] != "repeat_range":
+                continue
+
+            count = max(0, command.get("range_count", 0))
+
+            handle = ttk.Label(
+                self.commands,
+                text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑",
+                style="RangeHandle.TLabel",
+                cursor="sizing",
+                anchor="center",
+            )
+
+            handle.is_range_handle = True
+            handle.range_command_index = index
+            handle.range_controller_row = rows[index]
+
+            handle.bind("<ButtonPress-1>", self.start_range_drag)
+            handle.bind("<B1-Motion>", self.drag_range)
+            handle.bind("<ButtonRelease-1>", self.finish_range_drag)
+
+            handle.pack(fill=tk.X, pady=1)
+
+            range_handles.append((index, count, handle))
+
+        for index, count, handle in range_handles:
+            target = min(index + count, len(rows) - 1)
+
+            if rows:
+                handle.pack_configure(after=rows[target])
+
+        self.draw_saved_range_markers()
         self.root.after_idle(self.align_command_fields)
 
-    def create_command_row(self, index, command):
-        row = ttk.Frame(self.commands, padding=(5, 4))
+    def draw_saved_range_markers(self):
+        commands = self.current_data["commands"]
+        rows = self.command_rows()
 
+        for index, command in enumerate(commands):
+            if command["type"] != "repeat_range":
+                continue
+
+            count = command.get("range_count", 0)
+
+            for row in rows[index + 1 : index + 1 + count]:
+                marker = tk.Frame(
+                    row,
+                    background="#4A90D9",
+                    width=4,
+                    borderwidth=0,
+                )
+                marker.range_controller_index = index
+                marker.place(x=0, y=0, relheight=1)
+
+    def create_command_row(self, index, command):
+        frame_bg = ttk.Style().lookup("TFrame", "background")
+
+        row = tk.Frame(
+            self.commands,
+            background=frame_bg,
+            padx=5,
+            pady=4,
+            highlightthickness=0,
+            highlightbackground="#6AA9FF",
+            highlightcolor="#6AA9FF",
+        )
+        row.is_command_row = True
+        row.command_index = index
         row.pack(fill=tk.X, pady=1)
 
         tk.Frame(
@@ -1438,22 +1539,25 @@ class App:
             width=3,
             anchor="center",
         )
-
         handle.pack(side=tk.LEFT)
-
         handle.bind(
             "<ButtonPress-1>", lambda event: self.start_command_drag(event, index, row)
         )
-
         handle.bind("<B1-Motion>", self.drag_command)
-
         handle.bind("<ButtonRelease-1>", self.finish_command_drag)
 
-        labels = {"key": "鍵盤輸入", "click": "滑鼠點擊", "wait": "等待"}
-
-        ttk.Label(row, text=f"{index + 1}. {labels[command['type']]}", width=13).pack(
-            side=tk.LEFT
+        labels = {
+            "key": "鍵盤輸入",
+            "click": "滑鼠點擊",
+            "wait": "等待",
+            "repeat_range": "範圍重複執行",
+        }
+        row.number_label = ttk.Label(
+            row,
+            text=f"{index + 1}. {labels[command['type']]}",
+            width=13,
         )
+        row.number_label.pack(side=tk.LEFT)
 
         ttk.Button(
             row,
@@ -1466,34 +1570,31 @@ class App:
 
         content = ttk.Frame(row)
         content.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
         content.columnconfigure(1, weight=1)
-
         fields = ttk.Frame(content)
         fields.grid(row=0, column=0, sticky="w")
 
         if command["type"] == "key":
             self.create_key_field(fields, command)
-
             self.create_number_field(fields, command, "hold_ms", "", "ms")
-
         elif command["type"] == "click":
             x_var = self.create_number_field(fields, command, "x", "X", integer=True)
-
             y_var = self.create_number_field(fields, command, "y", "Y", integer=True)
-
             ttk.Button(
                 fields,
                 text="擷取位置",
                 command=lambda: self.capture_position(command, x_var, y_var),
             ).pack(side=tk.LEFT, padx=3)
-
         elif command["type"] == "wait":
             self.create_number_field(fields, command, "seconds", "", "ms", scale=1000)
+        elif command["type"] == "repeat_range":
+            self.create_number_field(fields, command, "count", "重複", integer=True)
+            ttk.Label(fields, text="次").pack(side=tk.LEFT)
 
         self.create_note_field(content, command).grid(
             row=0, column=1, sticky="ew", padx=(8, 5)
         )
+        return row
 
     def align_command_fields(self):
         self.root.update_idletasks()
@@ -1720,6 +1821,7 @@ class App:
             "鍵盤輸入": {"type": "key", "key": "", "hold_ms": 120},
             "滑鼠點擊": {"type": "click", "x": 0, "y": 0},
             "等待": {"type": "wait", "seconds": 1},
+            "範圍重複執行": {"type": "repeat_range", "count": 5},
         }
 
         command = defaults[self.kind_var.get()]
@@ -1742,56 +1844,19 @@ class App:
             return
 
         self.root.focus_set()
-        self.root.update_idletasks()
-
-        x = row.winfo_rootx()
-        y = row.winfo_rooty()
-        width = row.winfo_width()
-        height = row.winfo_height()
-
-        image = ImageGrab.grab(
-            bbox=(x, y, x + width, y + height),
-            include_layered_windows=True,
-            all_screens=True,
-        ).convert("RGB")
-
-        preview = tk.Toplevel(self.root)
-        preview.withdraw()
-
-        preview.overrideredirect(True)
-        preview.attributes("-topmost", True)
-
-        photo = ImageTk.PhotoImage(image)
-
-        label = tk.Label(preview, image=photo, borderwidth=0, highlightthickness=0)
-
-        label.image = photo
-        label.pack()
-
-        placeholder = tk.Label(
-            row,
-            text="",
-            background=self.colors["placeholder"],
-            relief="solid",
-            borderwidth=1,
-        )
-
-        placeholder.place(x=0, y=0, relwidth=1, relheight=1)
 
         self.command_drag = {
             "index": index,
             "target": index,
             "row": row,
-            "preview": preview,
-            "placeholder": placeholder,
-            "offset_x": event.x_root - x,
-            "offset_y": event.y_root - y,
+            "range_counts": {
+                command_index: command.get("range_count", 0)
+                for command_index, command in enumerate(self.current_data["commands"])
+                if command["type"] == "repeat_range"
+            },
         }
 
-        preview.geometry(f"{width}x{height}+{x}+{y}")
-
-        preview.update_idletasks()
-        preview.deiconify()
+        row.configure(highlightthickness=2)
 
     def drag_command(self, event):
         if self.command_drag is None:
@@ -1800,36 +1865,198 @@ class App:
         drag = self.command_drag
         row = drag["row"]
 
-        x = event.x_root - drag["offset_x"]
-        y = event.y_root - drag["offset_y"]
+        widgets = [widget for widget in self.commands.pack_slaves() if widget != row]
 
-        drag["preview"].geometry(f"+{x}+{y}")
+        insertion = len(widgets)
 
-        rows = [widget for widget in self.commands.pack_slaves() if widget != row]
-
-        target = len(rows)
-
-        center_y = y + row.winfo_height() / 2
-
-        for index, widget in enumerate(rows):
+        for index, widget in enumerate(widgets):
             middle = widget.winfo_rooty() + widget.winfo_height() / 2
 
-            if center_y < middle:
-                target = index
+            if event.y_root < middle:
+                insertion = index
                 break
 
-        if target == drag["target"]:
-            return
+        if insertion < len(widgets):
+            row.pack_configure(before=widgets[insertion])
+        elif widgets:
+            row.pack_configure(after=widgets[-1])
 
-        if target < len(rows):
-            row.pack_configure(before=rows[target])
-
-        elif rows:
-            row.pack_configure(after=rows[-1])
+        target = sum(
+            1
+            for widget in widgets[:insertion]
+            if getattr(widget, "is_command_row", False)
+        )
 
         drag["target"] = target
 
         self.root.update_idletasks()
+
+        # Update command numbers.
+        for index, command_row in enumerate(self.command_rows()):
+            label_text = command_row.number_label.cget("text")
+            command_name = label_text.split(". ", 1)[1]
+
+            command_row.number_label.configure(text=f"{index + 1}. {command_name}")
+
+        # Update range counts according to current widget order.
+        widgets = self.commands.pack_slaves()
+
+        for handle in widgets:
+            if not getattr(handle, "is_range_handle", False):
+                continue
+
+            controller_row = handle.range_controller_row
+
+            if controller_row not in widgets:
+                continue
+
+            start = widgets.index(controller_row)
+            end = widgets.index(handle)
+
+            if end <= start:
+                count = 0
+            else:
+                count = sum(
+                    1
+                    for widget in widgets[start + 1 : end]
+                    if getattr(widget, "is_command_row", False)
+                )
+
+            drag["range_counts"][handle.range_command_index] = count
+
+            handle.configure(text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑")
+
+        # Remove existing range markers.
+        for command_row in self.command_rows():
+            for marker in command_row.winfo_children():
+                if hasattr(marker, "range_controller_index"):
+                    marker.destroy()
+
+        # Redraw range markers according to current widget order.
+        widgets = self.commands.pack_slaves()
+
+        for handle in widgets:
+            if not getattr(handle, "is_range_handle", False):
+                continue
+
+            controller_row = handle.range_controller_row
+
+            if controller_row not in widgets:
+                continue
+
+            start = widgets.index(controller_row)
+            end = widgets.index(handle)
+
+            if end <= start:
+                continue
+
+            for widget in widgets[start + 1 : end]:
+                if not getattr(widget, "is_command_row", False):
+                    continue
+
+                marker = tk.Frame(
+                    widget,
+                    background="#4A90D9",
+                    width=4,
+                    borderwidth=0,
+                )
+
+                marker.range_controller_index = handle.range_command_index
+                marker.place(x=0, y=0, relheight=1)
+
+    def start_range_drag(self, event):
+        if self.runner.is_running() or not self.current_data:
+            return
+
+        handle = event.widget
+        index = handle.range_command_index
+        rows = self.command_rows()
+
+        if index >= len(rows) - 1:
+            return
+
+        self.range_drag = {
+            "index": index,
+            "count": max(0, self.current_data["commands"][index].get("range_count", 0)),
+            "markers": [],
+            "handle": handle,
+        }
+        for row in rows[index + 1 : index + 1 + self.range_drag["count"]]:
+            for marker in row.winfo_children():
+                if getattr(marker, "range_controller_index", None) == index:
+                    marker.destroy()
+        self.update_range_highlights()
+
+    def drag_range(self, event):
+        if self.range_drag is None:
+            return
+
+        rows = self.command_rows()
+        index = self.range_drag["index"]
+        count = 0
+
+        for row in rows[index + 1 :]:
+            middle = row.winfo_rooty() + row.winfo_height() / 2
+            if event.y_root >= middle:
+                count += 1
+
+        count = max(0, min(count, len(rows) - index - 1))
+        self.range_drag["count"] = count
+        self.range_drag["handle"].configure(text=f"⠿  拖曳設定範圍  ·  {count} 列")
+        self.update_range_highlights()
+
+    def update_range_highlights(self):
+        if self.range_drag is None:
+            return
+
+        self.clear_range_highlights()
+        rows = self.command_rows()
+        index = self.range_drag["index"]
+        count = self.range_drag["count"]
+
+        for row in rows[index + 1 : index + 1 + count]:
+            marker = tk.Frame(row, background="#4A90D9", width=3, borderwidth=0)
+            marker.place(x=0, y=0, relheight=1)
+            self.range_drag["markers"].append(marker)
+
+        # Move the independent insertion row immediately below the current range.
+        handle = self.range_drag["handle"]
+        target = min(index + count, len(rows) - 1)
+        if rows:
+            handle.pack_configure(after=rows[target])
+
+        self.root.update_idletasks()
+
+    def clear_range_highlights(self):
+        if self.range_drag is None:
+            return
+
+        for marker in self.range_drag.get("markers", []):
+            marker.destroy()
+        self.range_drag["markers"] = []
+
+    def finish_range_drag(self, event):
+        if self.range_drag is None:
+            return
+
+        drag = self.range_drag
+
+        self.clear_range_highlights()
+
+        if self.runner.is_running() or not self.current_data:
+            self.range_drag = None
+            return
+
+        index = drag["index"]
+        count = drag["count"]
+
+        command = self.current_data["commands"][index]
+        command["range_count"] = count
+
+        self.range_drag = None
+
+        self.save_current()
+        self.refresh_commands()
 
     def finish_command_drag(self, event):
         if self.command_drag is None:
@@ -1838,9 +2065,6 @@ class App:
         drag = self.command_drag
         self.command_drag = None
 
-        drag["preview"].destroy()
-        drag["placeholder"].destroy()
-
         index = drag["index"]
         target = drag["target"]
 
@@ -1848,14 +2072,16 @@ class App:
             self.refresh_commands()
             return
 
-        if index != target:
-            commands = self.current_data["commands"]
+        commands = self.current_data["commands"]
 
+        for command_index, count in drag["range_counts"].items():
+            commands[command_index]["range_count"] = count
+
+        if index != target:
             command = commands.pop(index)
             commands.insert(target, command)
 
-            self.save_current()
-
+        self.save_current()
         self.refresh_commands()
 
     def delete_command(self, index):
@@ -1865,7 +2091,18 @@ class App:
         if not self.current_data:
             return
 
-        self.current_data["commands"].pop(index)
+        commands = self.current_data["commands"]
+
+        for i, command in enumerate(commands):
+            if command["type"] != "repeat_range" or i == index:
+                continue
+
+            count = command.get("range_count", 0)
+
+            if i < index <= i + count:
+                command["range_count"] = max(0, count - 1)
+
+        commands.pop(index)
 
         self.save_current()
         self.refresh_commands()
@@ -2256,7 +2493,7 @@ class App:
         if iid not in self.tree_status_lights:
             canvas = self.create_status_light(self.tree)
 
-            canvas.bind("<Button-1>", lambda event: "break")
+            canvas.bind("<Button-1>", lambda event: self.on_status_click(path))
 
             canvas.bind("<MouseWheel>", self.scroll_tree_status)
 

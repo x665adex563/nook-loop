@@ -104,14 +104,44 @@ class MacroRunner:
 
             try:
                 while not stop_event.is_set():
-                    for command in commands:
+                    index = 0
+
+                    while index < len(commands):
                         if stop_event.is_set():
                             break
 
                         if not is_window(hwnd):
                             raise RuntimeError("目標視窗已關閉")
 
-                        self._execute_command(hwnd, pid, command, stop_event)
+                        command = commands[index]
+
+                        if command["type"] == "repeat_range":
+                            range_count = command.get("range_count", 0)
+                            repeat_count = int(command.get("count", 1))
+
+                            start = index + 1
+                            end = min(start + range_count, len(commands))
+
+                            for _ in range(repeat_count):
+                                for ranged_command in commands[start:end]:
+                                    if stop_event.is_set():
+                                        break
+
+                                    if not is_window(hwnd):
+                                        raise RuntimeError("目標視窗已關閉")
+
+                                    self._execute_command(
+                                        hwnd, pid, ranged_command, stop_event
+                                    )
+
+                                if stop_event.is_set():
+                                    break
+
+                            index = end
+
+                        else:
+                            self._execute_command(hwnd, pid, command, stop_event)
+                            index += 1
 
                     if stop_event.is_set():
                         break
