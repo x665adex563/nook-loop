@@ -266,6 +266,12 @@ class App:
         style = ttk.Style()
 
         style.configure("CommandMuted.TLabel", foreground=self.colors["muted"])
+        style.configure(
+            "RangeHandle.TLabel",
+            foreground="#4A90D9",
+            background=self.colors["surface"],
+            padding=(4, 0),
+        )
 
         style.configure(
             "CommandDelete.TButton",
@@ -1406,6 +1412,13 @@ class App:
 
             widget = getattr(widget, "master", None)
 
+    def command_rows(self):
+        return [
+            widget
+            for widget in self.commands.pack_slaves()
+            if getattr(widget, "is_command_row", False)
+        ]
+
     def refresh_commands(self):
         for widget in self.commands.winfo_children():
             widget.destroy()
@@ -1413,15 +1426,51 @@ class App:
         if not self.current_data:
             return
 
-        for index, command in enumerate(self.current_data["commands"]):
-            self.create_command_row(index, command)
+        commands = self.current_data["commands"]
+        rows = []
+        range_handles = []
+
+        for index, command in enumerate(commands):
+            row = self.create_command_row(index, command)
+            rows.append(row)
+
+        for index, command in enumerate(commands):
+            if command["type"] != "repeat_range":
+                continue
+
+            count = max(0, command.get("range_count", 0))
+
+            handle = ttk.Label(
+                self.commands,
+                text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑",
+                style="RangeHandle.TLabel",
+                cursor="sizing",
+                anchor="center",
+            )
+
+            handle.is_range_handle = True
+            handle.range_command_index = index
+
+            handle.bind("<ButtonPress-1>", self.start_range_drag)
+            handle.bind("<B1-Motion>", self.drag_range)
+            handle.bind("<ButtonRelease-1>", self.finish_range_drag)
+
+            handle.pack(fill=tk.X, pady=1)
+
+            range_handles.append((index, count, handle))
+
+        for index, count, handle in range_handles:
+            target = min(index + count, len(rows) - 1)
+
+            if rows:
+                handle.pack_configure(after=rows[target])
 
         self.draw_saved_range_markers()
         self.root.after_idle(self.align_command_fields)
 
     def draw_saved_range_markers(self):
         commands = self.current_data["commands"]
-        rows = self.commands.pack_slaves()
+        rows = self.command_rows()
 
         for index, command in enumerate(commands):
             if command["type"] != "repeat_range":
@@ -1436,12 +1485,13 @@ class App:
                     width=4,
                     borderwidth=0,
                 )
-
+                marker.range_controller_index = index
                 marker.place(x=0, y=0, relheight=1)
 
     def create_command_row(self, index, command):
         row = ttk.Frame(self.commands, padding=(5, 4))
-
+        row.is_command_row = True
+        row.command_index = index
         row.pack(fill=tk.X, pady=1)
 
         tk.Frame(
@@ -1460,15 +1510,11 @@ class App:
             width=3,
             anchor="center",
         )
-
         handle.pack(side=tk.LEFT)
-
         handle.bind(
             "<ButtonPress-1>", lambda event: self.start_command_drag(event, index, row)
         )
-
         handle.bind("<B1-Motion>", self.drag_command)
-
         handle.bind("<ButtonRelease-1>", self.finish_command_drag)
 
         labels = {
@@ -1477,7 +1523,6 @@ class App:
             "wait": "等待",
             "repeat_range": "範圍重複執行",
         }
-
         ttk.Label(row, text=f"{index + 1}. {labels[command['type']]}", width=13).pack(
             side=tk.LEFT
         )
@@ -1493,31 +1538,23 @@ class App:
 
         content = ttk.Frame(row)
         content.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
         content.columnconfigure(1, weight=1)
-
         fields = ttk.Frame(content)
         fields.grid(row=0, column=0, sticky="w")
 
         if command["type"] == "key":
             self.create_key_field(fields, command)
-
             self.create_number_field(fields, command, "hold_ms", "", "ms")
-
         elif command["type"] == "click":
             x_var = self.create_number_field(fields, command, "x", "X", integer=True)
-
             y_var = self.create_number_field(fields, command, "y", "Y", integer=True)
-
             ttk.Button(
                 fields,
                 text="擷取位置",
                 command=lambda: self.capture_position(command, x_var, y_var),
             ).pack(side=tk.LEFT, padx=3)
-
         elif command["type"] == "wait":
             self.create_number_field(fields, command, "seconds", "", "ms", scale=1000)
-
         elif command["type"] == "repeat_range":
             self.create_number_field(fields, command, "count", "重複", integer=True)
             ttk.Label(fields, text="次").pack(side=tk.LEFT)
@@ -1525,19 +1562,7 @@ class App:
         self.create_note_field(content, command).grid(
             row=0, column=1, sticky="ew", padx=(8, 5)
         )
-
-        if command["type"] == "repeat_range":
-            range_handle = ttk.Label(
-                content,
-                text=f"━━━━━━  拖曳設定範圍（目前 {command.get('range_count', 0)} 列）  ━━━━━━",
-                style="CommandMuted.TLabel",
-                cursor="sizing",
-                anchor="center",
-            )
-            range_handle.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
-            range_handle.bind("<ButtonPress-1>", self.start_range_drag)
-            range_handle.bind("<B1-Motion>", self.drag_range)
-            range_handle.bind("<ButtonRelease-1>", self.finish_range_drag)
+        return row
 
     def align_command_fields(self):
         self.root.update_idletasks()
@@ -1850,11 +1875,11 @@ class App:
 
         drag["preview"].geometry(f"+{x}+{y}")
 
-        rows = [widget for widget in self.commands.pack_slaves() if widget != row]
+        center_y = y + row.winfo_height() / 2
+
+        rows = [widget for widget in self.command_rows() if widget != row]
 
         target = len(rows)
-
-        center_y = y + row.winfo_height() / 2
 
         for index, widget in enumerate(rows):
             middle = widget.winfo_rooty() + widget.winfo_height() / 2
@@ -1863,18 +1888,60 @@ class App:
                 target = index
                 break
 
-        if target == drag["target"]:
-            return
+        if target != drag["target"]:
+            if target < len(rows):
+                row.pack_configure(before=rows[target])
+            elif rows:
+                row.pack_configure(after=rows[-1])
 
-        if target < len(rows):
-            row.pack_configure(before=rows[target])
+            drag["target"] = target
 
-        elif rows:
-            row.pack_configure(after=rows[-1])
+            self.root.update_idletasks()
 
-        drag["target"] = target
+        # Rebuild range markers according to the current widget order.
+        for command_row in self.command_rows():
+            for marker in command_row.winfo_children():
+                if hasattr(marker, "range_controller_index"):
+                    marker.destroy()
 
-        self.root.update_idletasks()
+        widgets = self.commands.pack_slaves()
+
+        for handle in widgets:
+            if not getattr(handle, "is_range_handle", False):
+                continue
+
+            controller_index = handle.range_command_index
+
+            controller_row = next(
+                (
+                    widget
+                    for widget in widgets
+                    if getattr(widget, "command_index", None) == controller_index
+                ),
+                None,
+            )
+
+            if controller_row is None:
+                continue
+
+            start = widgets.index(controller_row)
+            end = widgets.index(handle)
+
+            if end <= start:
+                continue
+
+            for widget in widgets[start + 1 : end]:
+                if not getattr(widget, "is_command_row", False):
+                    continue
+
+                marker = tk.Frame(
+                    widget,
+                    background="#4A90D9",
+                    width=4,
+                    borderwidth=0,
+                )
+                marker.range_controller_index = controller_index
+                marker.place(x=0, y=0, relheight=1)
 
     def finish_command_drag(self, event):
         if self.command_drag is None:
@@ -1896,6 +1963,19 @@ class App:
         if index != target:
             commands = self.current_data["commands"]
 
+            for i, command in enumerate(commands):
+                if command["type"] != "repeat_range":
+                    continue
+
+                count = command.get("range_count", 0)
+
+                if i < index <= i + count:
+                    if target > i + count:
+                        command["range_count"] = max(0, count - 1)
+                elif i < target <= i + count:
+                    if index > i + count:
+                        command["range_count"] = count + 1
+
             command = commands.pop(index)
             commands.insert(target, command)
 
@@ -1908,41 +1988,40 @@ class App:
             return
 
         handle = event.widget
-        row = handle.master.master
-
-        rows = self.commands.pack_slaves()
-        index = rows.index(row)
+        index = handle.range_command_index
+        rows = self.command_rows()
 
         if index >= len(rows) - 1:
             return
 
         self.range_drag = {
             "index": index,
-            "count": 1,
+            "count": max(0, self.current_data["commands"][index].get("range_count", 0)),
             "markers": [],
+            "handle": handle,
         }
-
+        for row in rows[index + 1 : index + 1 + self.range_drag["count"]]:
+            for marker in row.winfo_children():
+                if getattr(marker, "range_controller_index", None) == index:
+                    marker.destroy()
         self.update_range_highlights()
 
     def drag_range(self, event):
         if self.range_drag is None:
             return
 
-        rows = self.commands.pack_slaves()
+        rows = self.command_rows()
         index = self.range_drag["index"]
-
         count = 0
 
         for row in rows[index + 1 :]:
             middle = row.winfo_rooty() + row.winfo_height() / 2
-
             if event.y_root >= middle:
                 count += 1
 
-        count = max(1, min(count, len(rows) - index - 1))
-
+        count = max(0, min(count, len(rows) - index - 1))
         self.range_drag["count"] = count
-
+        self.range_drag["handle"].configure(text=f"⠿  拖曳設定範圍  ·  {count} 列")
         self.update_range_highlights()
 
     def update_range_highlights(self):
@@ -1950,22 +2029,22 @@ class App:
             return
 
         self.clear_range_highlights()
-
-        rows = self.commands.pack_slaves()
+        rows = self.command_rows()
         index = self.range_drag["index"]
         count = self.range_drag["count"]
 
         for row in rows[index + 1 : index + 1 + count]:
-            marker = tk.Frame(
-                row,
-                background=self.colors["placeholder"],
-                highlightbackground="#4A90D9",
-                highlightthickness=2,
-            )
-
-            marker.place(x=0, y=0, relwidth=1, relheight=1)
-
+            marker = tk.Frame(row, background="#4A90D9", width=3, borderwidth=0)
+            marker.place(x=0, y=0, relheight=1)
             self.range_drag["markers"].append(marker)
+
+        # Move the independent insertion row immediately below the current range.
+        handle = self.range_drag["handle"]
+        target = min(index + count, len(rows) - 1)
+        if rows:
+            handle.pack_configure(after=rows[target])
+
+        self.root.update_idletasks()
 
     def clear_range_highlights(self):
         if self.range_drag is None:
@@ -1973,7 +2052,6 @@ class App:
 
         for marker in self.range_drag.get("markers", []):
             marker.destroy()
-
         self.range_drag["markers"] = []
 
     def finish_range_drag(self, event):
