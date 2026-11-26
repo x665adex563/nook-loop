@@ -13,11 +13,7 @@ from core.bg_input import KEY_MAP
 from services.macro_manager import MacroManager, MACROS_DIR
 from services.macro_runner import MacroRunner
 from ui.coordinate_picker import pick_coordinate
-from ui.theme import (
-    THEMES,
-    apply_ttk_theme,
-    apply_titlebar_theme
-)
+from ui.theme import THEMES, apply_ttk_theme, apply_titlebar_theme
 from PIL import Image, ImageDraw, ImageGrab, ImageTk
 
 
@@ -36,15 +32,10 @@ class App:
         self.events = Queue()
 
         self.runner = MacroRunner(
-            log_callback=lambda message:
-                self.events.put(("log", message))
+            log_callback=lambda message: self.events.put(("log", message))
         )
 
-        self.hotkey = HotkeyManager(
-            lambda hotkey: self.events.put(
-                ("hotkey", hotkey)
-            )
-        )
+        self.hotkey = HotkeyManager(lambda hotkey: self.events.put(("hotkey", hotkey)))
 
         self.config = self.manager.load_config()
         self.font_size = self.config.get("font_size", "小")
@@ -81,16 +72,8 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def build_ui(self):
-        self.panes = ttk.PanedWindow(
-            self.root,
-            orient=tk.HORIZONTAL
-        )
-        self.panes.pack(
-            fill=tk.BOTH,
-            expand=True,
-            padx=10,
-            pady=5
-        )
+        self.panes = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.panes.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         self.left = ttk.Frame(self.panes, width=420)
         self.right = ttk.Frame(self.panes)
@@ -109,40 +92,24 @@ class App:
             height=18,
             highlightthickness=0,
             borderwidth=0,
-            background=ttk.Style().lookup(
-                "TFrame", "background"
-            )
+            background=ttk.Style().lookup("TFrame", "background"),
         )
 
     def draw_status_light(self, canvas, status):
         canvas.delete("all")
 
-        colors = {
-            "running": "#22A447",
-            "enabled": "#D6A500"
-        }
+        colors = {"running": "#22A447", "enabled": "#D6A500"}
 
         if status in colors:
-            canvas.create_oval(
-                4, 4, 14, 14,
-                fill=colors[status],
-                outline=""
-            )
+            canvas.create_oval(4, 4, 14, 14, fill=colors[status], outline="")
 
         elif status == "idle":
-            canvas.create_oval(
-                4, 4, 14, 14,
-                fill="",
-                outline="#808080",
-                width=1
-            )
+            canvas.create_oval(4, 4, 14, 14, fill="", outline="#808080", width=1)
 
     def resize_window_for_font(self):
-        width, height = {
-            "小": (1200, 650),
-            "中": (1500, 800),
-            "大": (1850, 950)
-        }[self.font_size]
+        width, height = {"小": (1200, 650), "中": (1500, 800), "大": (1850, 950)}[
+            self.font_size
+        ]
 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
@@ -158,10 +125,7 @@ class App:
         self.root.after(100, self.resize_panes_for_font)
 
     def resize_panes_for_font(self):
-        self.panes.sashpos(
-            0,
-            int(self.panes.winfo_width() * 0.38)
-        )
+        self.panes.sashpos(0, int(self.panes.winfo_width() * 0.38))
 
         self.update_tree_status()
 
@@ -169,7 +133,7 @@ class App:
         for button, color in (
             (self.add_file_button, "blue"),
             (self.add_command_button, "blue"),
-            (self.macro_start_button, "green")
+            (self.macro_start_button, "green"),
         ):
             background, active, foreground = self.colors[color]
 
@@ -178,23 +142,17 @@ class App:
                 activebackground=active,
                 foreground=foreground,
                 activeforeground=foreground,
-                disabledforeground=self.colors["disabled_foreground"]
+                disabledforeground=self.colors["disabled_foreground"],
             )
 
     def update_status_light_backgrounds(self):
-        background = ttk.Style().lookup(
-            "TFrame", "background"
-        )
+        background = ttk.Style().lookup("TFrame", "background")
 
-        self.macro_status_light.configure(
-            background=background
-        )
+        self.macro_status_light.configure(background=background)
 
     def update_log_theme(self):
         if self.theme == "light":
-            self.log_text.configure(
-                **self.light_log_colors
-            )
+            self.log_text.configure(**self.light_log_colors)
         else:
             self.log_text.configure(
                 background=self.colors["input"],
@@ -203,7 +161,7 @@ class App:
                 selectbackground=self.colors["selection"],
                 selectforeground=self.colors["foreground"],
                 highlightbackground=self.colors["border"],
-                highlightcolor=self.colors["border"]
+                highlightcolor=self.colors["border"],
             )
 
     def update_combobox_theme(self):
@@ -212,25 +170,18 @@ class App:
                 "background": self.colors["input"],
                 "foreground": self.colors["foreground"],
                 "selectbackground": self.colors["selection"],
-                "selectforeground": self.colors["foreground"]
+                "selectforeground": self.colors["foreground"],
             }
         else:
             colors = {
                 "background": "SystemWindow",
                 "foreground": "SystemWindowText",
                 "selectbackground": "SystemHighlight",
-                "selectforeground": "SystemHighlightText"
+                "selectforeground": "SystemHighlightText",
             }
 
-        for combo in (
-            self.window_combo,
-            self.mode_combo,
-            self.kind_combo
-        ):
-            popdown = combo.tk.call(
-                "ttk::combobox::PopdownWindow",
-                str(combo)
-            )
+        for combo in (self.window_combo, self.mode_combo, self.kind_combo):
+            popdown = combo.tk.call("ttk::combobox::PopdownWindow", str(combo))
 
             combo.tk.call(
                 f"{popdown}.f.l",
@@ -239,22 +190,16 @@ class App:
                     value
                     for key, color in colors.items()
                     for value in (f"-{key}", color)
-                ]
+                ],
             )
 
     def apply_theme(self):
-        apply_ttk_theme(
-            self.root,
-            self.theme,
-            self.light_ttk_theme
-        )
+        apply_ttk_theme(self.root, self.theme, self.light_ttk_theme)
 
         self.apply_font_size()
 
         self.command_canvas.configure(
-            background=ttk.Style().lookup(
-                "TFrame", "background"
-            )
+            background=ttk.Style().lookup("TFrame", "background")
         )
 
         self.update_colored_buttons()
@@ -265,35 +210,20 @@ class App:
         for row in self.commands.winfo_children():
             for widget in row.winfo_children():
                 if isinstance(widget, tk.Frame):
-                    widget.configure(
-                        background=self.colors["separator"]
-                    )
+                    widget.configure(background=self.colors["separator"])
 
-        self.tree.tag_configure(
-            "drop_target",
-            background=self.colors["drop_target"]
-        )
+        self.tree.tag_configure("drop_target", background=self.colors["drop_target"])
 
-        self.root.after_idle(
-            lambda: apply_titlebar_theme(
-                self.root,
-                self.theme
-            )
-        )
+        self.root.after_idle(lambda: apply_titlebar_theme(self.root, self.theme))
 
         self.update_status()
 
     def toggle_theme(self):
-        self.theme = (
-            "dark" if self.theme == "light"
-            else "light"
-        )
+        self.theme = "dark" if self.theme == "light" else "light"
 
         self.colors = THEMES[self.theme]
 
-        self.theme_button.config(
-            text="☀" if self.theme == "light" else "☾"
-        )
+        self.theme_button.config(text="☀" if self.theme == "light" else "☾")
 
         self.apply_theme()
 
@@ -305,9 +235,7 @@ class App:
 
         index = sizes.index(self.font_size)
 
-        self.font_size = sizes[
-            (index + 1) % len(sizes)
-        ]
+        self.font_size = sizes[(index + 1) % len(sizes)]
 
         self.apply_font_size()
         self.resize_window_for_font()
@@ -319,7 +247,7 @@ class App:
         size, title_size, row_height = {
             "小": (12, 17, 30),
             "中": (16, 21, 40),
-            "大": (20, 25, 50)
+            "大": (20, 25, 50),
         }[self.font_size]
 
         for name in (
@@ -330,118 +258,63 @@ class App:
             "TkCaptionFont",
             "TkSmallCaptionFont",
             "TkIconFont",
-            "TkTooltipFont"
+            "TkTooltipFont",
         ):
-            tkfont.nametofont(name).configure(
-                family="Microsoft JhengHei",
-                size=size
-            )
+            tkfont.nametofont(name).configure(family="Microsoft JhengHei", size=size)
 
         style = ttk.Style()
 
-        style.configure(
-            "CommandMuted.TLabel",
-            foreground=self.colors["muted"]
-        )
+        style.configure("CommandMuted.TLabel", foreground=self.colors["muted"])
 
         style.configure(
             "CommandDelete.TButton",
             background=self.colors["background"],
             foreground=self.colors["muted"],
             borderwidth=0,
-            relief="flat"
+            relief="flat",
         )
 
         style.map(
             "CommandDelete.TButton",
-            background=[
-                ("active", self.colors["surface"])
-            ],
-            foreground=[
-                ("active", self.colors["foreground"])
-            ]
+            background=[("active", self.colors["surface"])],
+            foreground=[("active", self.colors["foreground"])],
         )
 
-        style.configure(
-            ".",
-            font=("Microsoft JhengHei", size)
-        )
+        style.configure(".", font=("Microsoft JhengHei", size))
+
+        style.configure("TEntry", padding=(4, 3))
+
+        style.configure("Note.TEntry", foreground=self.colors["foreground"])
+
+        style.configure("NotePlaceholder.TEntry", foreground=self.colors["muted"])
+
+        style.configure("TCombobox", padding=(4, 3))
+
+        style.configure("TButton", anchor="center", padding=(6, 3))
 
         style.configure(
-            "TEntry",
-            padding=(4, 3)
+            "Treeview", font=("Microsoft JhengHei", size), rowheight=row_height
         )
 
-        style.configure(
-            "Note.TEntry",
-            foreground=self.colors["foreground"]
-        )
+        style.configure("Treeview.Heading", font=("Microsoft JhengHei", size))
 
-        style.configure(
-            "NotePlaceholder.TEntry",
-            foreground=self.colors["muted"]
-        )
+        style.configure("Title.TLabel", font=("Microsoft JhengHei", title_size, "bold"))
 
-        style.configure(
-            "TCombobox",
-            padding=(4, 3)
-        )
-
-        style.configure(
-            "TButton",
-            anchor="center",
-            padding=(6, 3)
-        )
-
-        style.configure(
-            "Treeview",
-            font=("Microsoft JhengHei", size),
-            rowheight=row_height
-        )
-
-        style.configure(
-            "Treeview.Heading",
-            font=("Microsoft JhengHei", size)
-        )
-
-        style.configure(
-            "Title.TLabel",
-            font=("Microsoft JhengHei", title_size, "bold")
-        )
-
-        style.configure(
-            "Section.TLabel",
-            font=("Microsoft JhengHei", size + 2, "bold")
-        )
+        style.configure("Section.TLabel", font=("Microsoft JhengHei", size + 2, "bold"))
 
         self.font_button.config(text=self.font_size)
 
-        self.log_text.config(
-            font=("Microsoft JhengHei", size + 1)
-        )
+        self.log_text.config(font=("Microsoft JhengHei", size + 1))
 
-        icon_size = {
-            "小": 17,
-            "中": 21,
-            "大": 25
-        }[self.font_size]
+        icon_size = {"小": 17, "中": 21, "大": 25}[self.font_size]
 
-        self.add_file_icon = self.create_add_icon(
-            size=icon_size
-        )
+        self.add_file_icon = self.create_add_icon(size=icon_size)
 
-        self.add_folder_icon = self.create_add_icon(
-            folder=True,
-            size=icon_size
-        )
+        self.add_folder_icon = self.create_add_icon(folder=True, size=icon_size)
 
-        self.add_file_button.config(
-            image=self.add_file_icon
-        )
+        self.add_file_button.config(image=self.add_file_icon)
 
-        self.add_folder_button.config(
-            image=self.add_folder_icon
-        )
+        self.add_folder_button.config(image=self.add_folder_icon)
 
         self.root.update_idletasks()
 
@@ -450,46 +323,35 @@ class App:
             height=self.add_folder_button.winfo_reqheight() - 2,
             padx=0,
             pady=0,
-            borderwidth=1
+            borderwidth=1,
         )
 
         hotkey_width, status_width, delete_width = {
             "小": (100, 100, 45),
             "中": (130, 130, 60),
-            "大": (160, 160, 75)
+            "大": (160, 160, 75),
         }[self.font_size]
 
-        self.tree.column(
-            "hotkey",
-            width=hotkey_width
-        )
+        self.tree.column("hotkey", width=hotkey_width)
 
-        self.tree.column(
-            "status",
-            width=status_width
-        )
+        self.tree.column("status", width=status_width)
 
-        self.tree.column(
-            "delete",
-            width=delete_width
-        )
+        self.tree.column("delete", width=delete_width)
 
-        self.root.after_idle(
-            self.align_command_fields
-        )
+        self.root.after_idle(self.align_command_fields)
 
         style.configure(
             "Command.TEntry",
             bordercolor=self.colors["separator"],
             lightcolor=self.colors["separator"],
-            darkcolor=self.colors["separator"]
+            darkcolor=self.colors["separator"],
         )
 
         style.configure(
             "Note.TEntry",
             bordercolor=self.colors["separator"],
             lightcolor=self.colors["separator"],
-            darkcolor=self.colors["separator"]
+            darkcolor=self.colors["separator"],
         )
 
     def build_toolbar(self, parent):
@@ -497,59 +359,33 @@ class App:
         toolbar.pack(side=tk.LEFT)
 
         self.log_button = ttk.Button(
-            toolbar,
-            text="📖",
-            width=3,
-            command=self.toggle_log
+            toolbar, text="📖", width=3, command=self.toggle_log
         )
 
-        self.log_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
+        self.log_button.pack(side=tk.LEFT, padx=(0, 3))
 
-        self.add_tooltip(
-            self.log_button,
-            "執行日誌"
-        )
+        self.add_tooltip(self.log_button, "執行日誌")
 
         self.font_button = ttk.Button(
-            toolbar,
-            text=self.font_size,
-            width=3,
-            command=self.cycle_font_size
+            toolbar, text=self.font_size, width=3, command=self.cycle_font_size
         )
 
-        self.font_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
+        self.font_button.pack(side=tk.LEFT, padx=(0, 3))
 
-        self.add_tooltip(
-            self.font_button,
-            "切換字體大小"
-        )
+        self.add_tooltip(self.font_button, "切換字體大小")
 
         self.theme_button = ttk.Button(
             toolbar,
             text="☀" if self.theme == "light" else "☾",
             width=3,
-            command=self.toggle_theme
+            command=self.toggle_theme,
         )
 
-        self.theme_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
+        self.theme_button.pack(side=tk.LEFT, padx=(0, 3))
 
-        self.add_tooltip(
-            self.theme_button,
-            "切換深淺色模式"
-        )
+        self.add_tooltip(self.theme_button, "切換深淺色模式")
 
-    def create_colored_button(
-        self, parent, color="blue", **kwargs
-    ):
+    def create_colored_button(self, parent, color="blue", **kwargs):
         background, active, foreground = self.colors[color]
 
         return tk.Button(
@@ -566,7 +402,7 @@ class App:
             padx=8,
             pady=4,
             cursor="hand2",
-            **kwargs
+            **kwargs,
         )
 
     def create_add_icon(self, folder=False, size=18):
@@ -577,48 +413,24 @@ class App:
 
         if folder:
             draw.line(
-                [
-                    (5, 39), (5, 10),
-                    (19, 10), (24, 16),
-                    (43, 16), (43, 39),
-                    (5, 39)
-                ],
+                [(5, 39), (5, 10), (19, 10), (24, 16), (43, 16), (43, 39), (5, 39)],
                 fill=color,
-                width=3
+                width=3,
             )
         else:
             draw.line(
-                [
-                    (10, 5), (29, 5),
-                    (39, 15), (39, 43),
-                    (10, 43), (10, 5)
-                ],
+                [(10, 5), (29, 5), (39, 15), (39, 43), (10, 43), (10, 5)],
                 fill=color,
-                width=3
+                width=3,
             )
 
-            draw.line(
-                [(29, 5), (29, 15), (39, 15)],
-                fill=color,
-                width=3
-            )
+            draw.line([(29, 5), (29, 15), (39, 15)], fill=color, width=3)
 
-        draw.line(
-            [(18, 28), (30, 28)],
-            fill=color,
-            width=3
-        )
+        draw.line([(18, 28), (30, 28)], fill=color, width=3)
 
-        draw.line(
-            [(24, 22), (24, 34)],
-            fill=color,
-            width=3
-        )
+        draw.line([(24, 22), (24, 34)], fill=color, width=3)
 
-        image = image.resize(
-            (size, size),
-            Image.Resampling.LANCZOS
-        )
+        image = image.resize((size, size), Image.Resampling.LANCZOS)
 
         return ImageTk.PhotoImage(image)
 
@@ -627,49 +439,25 @@ class App:
         header.pack(fill=tk.X, pady=(0, 6))
 
         self.add_file_icon = self.create_add_icon()
-        self.add_folder_icon = self.create_add_icon(
-            folder=True
-        )
+        self.add_folder_icon = self.create_add_icon(folder=True)
 
         self.add_file_button = self.create_colored_button(
-            header,
-            color="blue",
-            image=self.add_file_icon,
-            command=self.create_macro
+            header, color="blue", image=self.add_file_icon, command=self.create_macro
         )
 
-        self.add_file_button.config(
-            relief="raised",
-            borderwidth=1,
-            padx=3,
-            pady=2
-        )
+        self.add_file_button.config(relief="raised", borderwidth=1, padx=3, pady=2)
 
-        self.add_file_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
+        self.add_file_button.pack(side=tk.LEFT, padx=(0, 3))
 
-        self.add_tooltip(
-            self.add_file_button,
-            "新增空巨集"
-        )
+        self.add_tooltip(self.add_file_button, "新增空巨集")
 
         self.add_folder_button = ttk.Button(
-            header,
-            image=self.add_folder_icon,
-            command=self.create_folder
+            header, image=self.add_folder_icon, command=self.create_folder
         )
 
-        self.add_folder_button.pack(
-            side=tk.LEFT,
-            padx=(0, 3)
-        )
+        self.add_folder_button.pack(side=tk.LEFT, padx=(0, 3))
 
-        self.add_tooltip(
-            self.add_folder_button,
-            "新增資料夾"
-        )
+        self.add_tooltip(self.add_folder_button, "新增資料夾")
 
         self.build_toolbar(header)
 
@@ -678,7 +466,7 @@ class App:
             columns=("hotkey", "status", "check", "delete"),
             displaycolumns=("hotkey", "status", "delete"),
             show="tree headings",
-            selectmode="browse"
+            selectmode="browse",
         )
 
         self.tree.heading("#0", text="名稱")
@@ -688,22 +476,10 @@ class App:
 
         self.tree.column("#0", width=170, minwidth=100)
         self.tree.column(
-            "hotkey",
-            width=100,
-            minwidth=65,
-            stretch=False,
-            anchor="center"
+            "hotkey", width=100, minwidth=65, stretch=False, anchor="center"
         )
-        self.tree.column(
-            "status",
-            width=45,
-            stretch=False,
-            anchor="center"
-        )
-        self.tree.column(
-            "delete", width=45, stretch=False,
-            anchor="center"
-        )
+        self.tree.column("status", width=45, stretch=False, anchor="center")
+        self.tree.column("delete", width=45, stretch=False, anchor="center")
 
         self.tree.pack(fill=tk.BOTH, expand=True)
 
@@ -711,34 +487,16 @@ class App:
         self.tree_separators = {}
 
         self.tree_header_separator = tk.Frame(
-            self.tree,
-            background=self.colors["separator"],
-            height=1,
-            borderwidth=0
+            self.tree, background=self.colors["separator"], height=1, borderwidth=0
         )
 
-        self.tree.bind(
-            "<<TreeviewSelect>>",
-            self.on_tree_select
-        )
-        self.tree.bind(
-            "<ButtonPress-1>",
-            self.on_tree_click
-        )
-        self.tree.bind(
-            "<ButtonRelease-1>",
-            self.on_tree_release
-        )
+        self.tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        self.tree.bind("<ButtonPress-1>", self.on_tree_click)
+        self.tree.bind("<ButtonRelease-1>", self.on_tree_release)
 
-        self.tree.bind(
-            "<B1-Motion>",
-            self.on_tree_drag
-        )
+        self.tree.bind("<B1-Motion>", self.on_tree_drag)
 
-        self.tree.tag_configure(
-            "drop_target",
-            background=self.colors["drop_target"]
-        )
+        self.tree.tag_configure("drop_target", background=self.colors["drop_target"])
 
     def build_editor(self):
         self.title_var = tk.StringVar()
@@ -748,11 +506,9 @@ class App:
 
         self.macro_hotkey_entry = None
 
-        ttk.Label(
-            title_row,
-            textvariable=self.title_var,
-            style="Title.TLabel"
-        ).pack(side=tk.LEFT)
+        ttk.Label(title_row, textvariable=self.title_var, style="Title.TLabel").pack(
+            side=tk.LEFT
+        )
 
         self.editor_body = ttk.Frame(self.right)
 
@@ -762,10 +518,7 @@ class App:
         window_row = ttk.Frame(settings)
         window_row.pack(fill=tk.X, pady=(3, 10))
 
-        ttk.Label(
-            window_row,
-            text="目標視窗"
-        ).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(window_row, text="目標視窗").pack(side=tk.LEFT, padx=(0, 5))
 
         self.window_var = tk.StringVar()
 
@@ -773,60 +526,39 @@ class App:
             window_row,
             textvariable=self.window_var,
             state="readonly",
-            postcommand=self.refresh_windows
+            postcommand=self.refresh_windows,
         )
 
-        self.window_combo.pack(
-            side=tk.LEFT,
-            fill=tk.X,
-            expand=True
-        )
+        self.window_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        self.window_combo.bind(
-            "<<ComboboxSelected>>",
-            self.save_settings
-        )
+        self.window_combo.bind("<<ComboboxSelected>>", self.save_settings)
 
         mode_row = ttk.Frame(settings)
         mode_row.pack(fill=tk.X, pady=5)
 
-        ttk.Label(
-            mode_row,
-            text="執行方式"
-        ).pack(side=tk.LEFT)
+        ttk.Label(mode_row, text="執行方式").pack(side=tk.LEFT)
 
         self.mode_options = {
             "僅執行一次": "once",
             "固定間隔重複": "interval",
-            "無限循環": "loop"
+            "無限循環": "loop",
         }
 
-        self.mode_var = tk.StringVar(
-            value="僅執行一次"
-        )
+        self.mode_var = tk.StringVar(value="僅執行一次")
 
         self.mode_combo = ttk.Combobox(
             mode_row,
             textvariable=self.mode_var,
             values=list(self.mode_options),
             state="readonly",
-            width=14
+            width=14,
         )
 
-        self.mode_combo.pack(
-            side=tk.LEFT,
-            padx=(5, 15)
-        )
+        self.mode_combo.pack(side=tk.LEFT, padx=(5, 15))
 
-        self.mode_combo.bind(
-            "<<ComboboxSelected>>",
-            self.on_mode_change
-        )
+        self.mode_combo.bind("<<ComboboxSelected>>", self.on_mode_change)
 
-        ttk.Label(
-            mode_row,
-            text="每輪結束後等待"
-        ).pack(side=tk.LEFT)
+        ttk.Label(mode_row, text="每輪結束後等待").pack(side=tk.LEFT)
 
         self.interval_var = tk.StringVar(value="30")
 
@@ -835,37 +567,25 @@ class App:
             textvariable=self.interval_var,
             width=6,
             justify="center",
-            state="disabled"
+            state="disabled",
         )
 
-        self.interval_entry.pack(
-            side=tk.LEFT,
-            padx=5
-        )
+        self.interval_entry.pack(side=tk.LEFT, padx=5)
 
-        self.interval_entry.bind(
-            "<FocusOut>", self.save_settings
-        )
+        self.interval_entry.bind("<FocusOut>", self.save_settings)
 
-        self.interval_entry.bind(
-            "<Return>", self.save_settings
-        )
+        self.interval_entry.bind("<Return>", self.save_settings)
 
-        ttk.Label(
-            mode_row,
-            text="秒"
-        ).pack(side=tk.LEFT)
+        ttk.Label(mode_row, text="秒").pack(side=tk.LEFT)
 
         command_header = ttk.Frame(self.editor_body)
         command_header.pack(fill=tk.X, pady=(5, 0))
 
         self.command_header = command_header
 
-        ttk.Label(
-            command_header,
-            text="指令列表",
-            style="Section.TLabel"
-        ).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Label(command_header, text="指令列表", style="Section.TLabel").pack(
+            side=tk.LEFT, padx=(0, 8)
+        )
 
         self.kind_var = tk.StringVar(value="鍵盤輸入")
 
@@ -874,19 +594,13 @@ class App:
             textvariable=self.kind_var,
             values=("鍵盤輸入", "滑鼠點擊", "等待"),
             state="readonly",
-            width=10
+            width=10,
         )
 
-        self.kind_combo.pack(
-            side=tk.LEFT,
-            padx=(0, 5)
-        )
+        self.kind_combo.pack(side=tk.LEFT, padx=(0, 5))
 
         self.add_command_button = self.create_colored_button(
-            command_header,
-            color="blue",
-            text="+ 新增指令",
-            command=self.add_command
+            command_header, color="blue", text="+ 新增指令", command=self.add_command
         )
 
         self.add_command_button.pack(side=tk.LEFT)
@@ -896,122 +610,72 @@ class App:
             color="green",
             text="執行",
             command=self.toggle_macro,
-            state="disabled"
+            state="disabled",
         )
 
-        self.macro_start_button.pack(
-            side=tk.RIGHT,
-            padx=(0, 5)
-        )
+        self.macro_start_button.pack(side=tk.RIGHT, padx=(0, 5))
 
-        self.macro_status_light = self.create_status_light(
-            command_header
-        )
+        self.macro_status_light = self.create_status_light(command_header)
 
-        self.macro_status_light.pack(
-            side=tk.RIGHT,
-            padx=(0, 3)
-        )
+        self.macro_status_light.pack(side=tk.RIGHT, padx=(0, 3))
 
-        self.macro_status_light.bind(
-            "<Button-1>",
-            self.on_macro_status_click
-        )
+        self.macro_status_light.bind("<Button-1>", self.on_macro_status_click)
 
         command_area = ttk.Frame(self.editor_body)
-        command_area.pack(
-            fill=tk.BOTH,
-            expand=True,
-            pady=5
-        )
+        command_area.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        self.command_canvas = tk.Canvas(
-            command_area,
-            highlightthickness=0
-        )
+        self.command_canvas = tk.Canvas(command_area, highlightthickness=0)
 
         scrollbar = ttk.Scrollbar(
-            command_area,
-            orient=tk.VERTICAL,
-            command=self.command_canvas.yview
+            command_area, orient=tk.VERTICAL, command=self.command_canvas.yview
         )
 
-        self.command_canvas.configure(
-            yscrollcommand=scrollbar.set
-        )
+        self.command_canvas.configure(yscrollcommand=scrollbar.set)
 
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        self.command_canvas.pack(
-            side=tk.LEFT,
-            fill=tk.BOTH,
-            expand=True
-        )
+        self.command_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.commands = ttk.Frame(self.command_canvas)
 
         self.command_window = self.command_canvas.create_window(
-            (0, 0),
-            window=self.commands,
-            anchor="nw"
+            (0, 0), window=self.commands, anchor="nw"
         )
 
         self.commands.bind(
             "<Configure>",
             lambda event: self.command_canvas.configure(
                 scrollregion=self.command_canvas.bbox("all")
-            )
+            ),
         )
 
         self.command_canvas.bind(
             "<Configure>",
             lambda event: self.command_canvas.itemconfigure(
-                self.command_window,
-                width=event.width
-            )
+                self.command_window, width=event.width
+            ),
         )
 
-        self.root.bind(
-            "<MouseWheel>",
-            self.scroll_commands,
-            add="+"
-        )
+        self.root.bind("<MouseWheel>", self.scroll_commands, add="+")
 
         self.saved_var = tk.StringVar()
 
-        ttk.Label(
-            self.editor_body,
-            textvariable=self.saved_var
-        ).pack(anchor="e", pady=5)
-
-        self.right.bind(
-            "<Button-1>",
-            self.on_editor_blank_click
+        ttk.Label(self.editor_body, textvariable=self.saved_var).pack(
+            anchor="e", pady=5
         )
 
-        self.editor_body.bind(
-            "<Button-1>",
-            self.on_editor_blank_click
-        )
+        self.right.bind("<Button-1>", self.on_editor_blank_click)
 
-        self.command_canvas.bind(
-            "<Button-1>",
-            self.on_editor_blank_click
-        )
+        self.editor_body.bind("<Button-1>", self.on_editor_blank_click)
 
-        self.commands.bind(
-            "<Button-1>",
-            self.on_editor_blank_click
-        )
+        self.command_canvas.bind("<Button-1>", self.on_editor_blank_click)
+
+        self.commands.bind("<Button-1>", self.on_editor_blank_click)
 
     def on_editor_blank_click(self, event):
         self.root.focus_set()
 
-        for combo in (
-            self.window_combo,
-            self.mode_combo,
-            self.kind_combo
-        ):
+        for combo in (self.window_combo, self.mode_combo, self.kind_combo):
             combo.selection_clear()
 
         return "break"
@@ -1030,19 +694,12 @@ class App:
             tooltip.attributes("-topmost", True)
 
             x = widget.winfo_rootx()
-            y = (
-                widget.winfo_rooty()
-                + widget.winfo_height() + 5
-            )
+            y = widget.winfo_rooty() + widget.winfo_height() + 5
 
             tooltip.geometry(f"+{x}+{y}")
 
             ttk.Label(
-                tooltip,
-                text=text,
-                padding=(8, 5),
-                relief="solid",
-                borderwidth=1
+                tooltip, text=text, padding=(8, 5), relief="solid", borderwidth=1
             ).pack()
 
         def enter(event=None):
@@ -1072,10 +729,7 @@ class App:
         self.log_visible = False
 
         self.log_text = tk.Text(
-            self.log_frame,
-            height=7,
-            state="disabled",
-            font=("Consolas", 10)
+            self.log_frame, height=7, state="disabled", font=("Consolas", 10)
         )
 
         self.light_log_colors = {
@@ -1087,24 +741,17 @@ class App:
                 "selectbackground",
                 "selectforeground",
                 "highlightbackground",
-                "highlightcolor"
+                "highlightcolor",
             )
         }
 
-        self.log_text.pack(
-            fill=tk.BOTH,
-            expand=True
-        )
+        self.log_text.pack(fill=tk.BOTH, expand=True)
 
     def toggle_log(self):
         self.log_visible = not self.log_visible
 
         if self.log_visible:
-            self.log_frame.pack(
-                fill=tk.X,
-                padx=10,
-                pady=(0, 10)
-            )
+            self.log_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
         else:
             self.log_frame.pack_forget()
 
@@ -1112,39 +759,26 @@ class App:
         timestamp = datetime.now().strftime("%H:%M:%S")
 
         self.log_text.config(state="normal")
-        self.log_text.insert(
-            tk.END,
-            f"[{timestamp}] {message}\n"
-        )
+        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
         self.log_text.see(tk.END)
         self.log_text.config(state="disabled")
 
     def refresh_windows(self):
         self.windows = get_windows()
 
-        titles = [
-            window["title"]
-            for window in self.windows
-        ]
+        titles = [window["title"] for window in self.windows]
 
         self.window_combo.config(values=titles)
 
     def refresh_tree(self, select=None):
-        opened = {
-            iid: self.tree.item(iid, "open")
-            for iid in self.tree.get_children()
-        }
+        opened = {iid: self.tree.item(iid, "open") for iid in self.tree.get_children()}
 
         self.tree.delete(*self.tree.get_children())
 
         for folder in self.manager.get_folders():
             state = self.manager.get_folder_state(folder)
 
-            symbol = {
-                "checked": "☑",
-                "unchecked": "☐",
-                "partial": "▣"
-            }[state]
+            symbol = {"checked": "☑", "unchecked": "☐", "partial": "▣"}[state]
 
             self.tree.insert(
                 "",
@@ -1152,7 +786,7 @@ class App:
                 iid=str(folder),
                 text=f"✎  📁 {folder.name}",
                 values=("", "", symbol, "🗑"),
-                open=opened.get(str(folder), True)
+                open=opened.get(str(folder), True),
             )
 
             for path in self.manager.get_macros(folder):
@@ -1179,12 +813,7 @@ class App:
             "end",
             iid=str(path),
             text=f'✎  {data["name"]}',
-            values=(
-                data["hotkey"] or "—",
-                "",
-                symbol,
-                "🗑"
-            )
+            values=(data["hotkey"] or "—", "", symbol, "🗑"),
         )
 
     def update_editor_visibility(self):
@@ -1192,16 +821,10 @@ class App:
         self.editor_body.pack_forget()
 
         if self.selected_path is not None:
-            self.title_row.pack(
-                fill=tk.X,
-                pady=(0, 10)
-            )
+            self.title_row.pack(fill=tk.X, pady=(0, 10))
 
         if self.current_path is not None:
-            self.editor_body.pack(
-                fill=tk.BOTH,
-                expand=True
-            )
+            self.editor_body.pack(fill=tk.BOTH, expand=True)
 
     def clear_selection(self):
         self.current_path = None
@@ -1257,23 +880,15 @@ class App:
         if path.is_dir():
             state = self.manager.get_folder_state(path)
 
-            self.manager.set_folder_enabled(
-                path,
-                state != "checked"
-            )
+            self.manager.set_folder_enabled(path, state != "checked")
         else:
             data = self.manager.load(path)
 
-            self.manager.set_enabled(
-                path,
-                not data.get("enabled", False)
-            )
+            self.manager.set_enabled(path, not data.get("enabled", False))
 
         if self.current_path:
-            self.current_data["enabled"] = (
-                self.manager.load(
-                    self.current_path
-                ).get("enabled", False)
+            self.current_data["enabled"] = self.manager.load(self.current_path).get(
+                "enabled", False
             )
 
         self.refresh_tree()
@@ -1282,16 +897,12 @@ class App:
     def on_tree_click(self, event):
         iid = self.tree.identify_row(event.y)
         column = self.tree.identify_column(event.x)
-        region = self.tree.identify_region(
-            event.x, event.y
-        )
+        region = self.tree.identify_region(event.x, event.y)
 
         if region == "nothing" and not iid:
             self.root.focus_set()
 
-            self.tree.selection_remove(
-                *self.tree.selection()
-            )
+            self.tree.selection_remove(*self.tree.selection())
 
             self.tree.focus("")
             self.clear_selection()
@@ -1311,10 +922,10 @@ class App:
         path = Path(iid)
 
         if column == "#1":
-            if (
-                path.is_file()
-                and self.is_hotkey_click(iid, event.x)
-            ):
+            if path.is_file() and self.is_hotkey_click(iid, event.x):
+                self.tree.selection_set(iid)
+                self.tree.focus(iid)
+
                 self.configure_macro_hotkey(path)
 
                 return "break"
@@ -1322,7 +933,9 @@ class App:
             return
 
         if column == "#2":
-            self.toggle_enabled(path)
+            self.tree.selection_set(iid)
+            self.tree.focus("")
+            self.root.focus_set()
             return "break"
 
         if column == "#3":
@@ -1335,9 +948,7 @@ class App:
                 return "break"
 
         if column == "#0":
-            element = self.tree.identify_element(
-                event.x, event.y
-            )
+            element = self.tree.identify_element(event.x, event.y)
 
             if element.endswith("indicator"):
                 return
@@ -1353,20 +964,13 @@ class App:
         preview.attributes("-alpha", 0.85)
 
         ttk.Label(
-            preview,
-            text=text,
-            padding=(12, 8),
-            relief="solid",
-            borderwidth=1
+            preview, text=text, padding=(12, 8), relief="solid", borderwidth=1
         ).pack()
 
         return preview
 
     def move_drag_preview(self, preview, event):
-        preview.geometry(
-            f"+{event.x_root + 15}"
-            f"+{event.y_root + 15}"
-        )
+        preview.geometry(f"+{event.x_root + 15}" f"+{event.y_root + 15}")
 
     def clear_tree_drag(self):
         if self.drag_preview is not None:
@@ -1375,10 +979,7 @@ class App:
 
         if self.drag_target:
             if self.tree.exists(self.drag_target):
-                self.tree.item(
-                    self.drag_target,
-                    tags=()
-                )
+                self.tree.item(self.drag_target, tags=())
 
         self.drag_target = None
         self.drag_path = None
@@ -1394,10 +995,7 @@ class App:
             self.clear_tree_drag()
             return
 
-        distance = (
-            abs(event.x - self.drag_start[0])
-            + abs(event.y - self.drag_start[1])
-        )
+        distance = abs(event.x - self.drag_start[0]) + abs(event.y - self.drag_start[1])
 
         if distance < 8 and self.drag_preview is None:
             return
@@ -1405,28 +1003,17 @@ class App:
         if self.drag_preview is None:
             path = self.drag_path
 
-            text = (
-                f"📁 {path.name}"
-                if path.is_dir()
-                else path.stem
-            )
+            text = f"📁 {path.name}" if path.is_dir() else path.stem
 
-            self.drag_preview = (
-                self.create_drag_preview(text)
-            )
+            self.drag_preview = self.create_drag_preview(text)
 
             self.tree.configure(cursor="fleur")
 
-        self.move_drag_preview(
-            self.drag_preview, event
-        )
+        self.move_drag_preview(self.drag_preview, event)
 
         if self.drag_target:
             if self.tree.exists(self.drag_target):
-                self.tree.item(
-                    self.drag_target,
-                    tags=()
-                )
+                self.tree.item(self.drag_target, tags=())
 
         self.drag_target = None
 
@@ -1445,10 +1032,7 @@ class App:
                 self.drag_target = str(target)
 
                 if self.tree.exists(self.drag_target):
-                    self.tree.item(
-                        self.drag_target,
-                        tags=("drop_target",)
-                    )
+                    self.tree.item(self.drag_target, tags=("drop_target",))
 
     def on_tree_release(self, event):
         path = self.drag_path
@@ -1479,15 +1063,10 @@ class App:
             if target == path:
                 return
 
-            folder = (
-                target if target.is_dir()
-                else target.parent
-            )
+            folder = target if target.is_dir() else target.parent
 
         else:
-            region = self.tree.identify_region(
-                event.x, event.y
-            )
+            region = self.tree.identify_region(event.x, event.y)
 
             if region != "nothing":
                 return
@@ -1498,28 +1077,20 @@ class App:
             return
 
         try:
-            destination = self.manager.move_macro(
-                path, folder
-            )
+            destination = self.manager.move_macro(path, folder)
 
             self.selected_path = destination
             self.refresh_tree(destination)
             self.load_macro(destination)
 
         except Exception as error:
-            messagebox.showerror(
-                "移動失敗", str(error)
-            )
+            messagebox.showerror("移動失敗", str(error))
 
     def create_folder(self):
         if self.runner.is_running():
             return
 
-        name = simpledialog.askstring(
-            "新增資料夾",
-            "資料夾名稱：",
-            parent=self.root
-        )
+        name = simpledialog.askstring("新增資料夾", "資料夾名稱：", parent=self.root)
 
         if not name:
             return
@@ -1534,11 +1105,7 @@ class App:
         if self.runner.is_running():
             return
 
-        name = simpledialog.askstring(
-            "新增巨集",
-            "巨集名稱：",
-            parent=self.root
-        )
+        name = simpledialog.askstring("新增巨集", "巨集名稱：", parent=self.root)
 
         if not name:
             return
@@ -1553,9 +1120,7 @@ class App:
             )
 
         try:
-            path = self.manager.create_macro(
-                name, folder
-            )
+            path = self.manager.create_macro(name, folder)
 
             self.refresh_tree(path)
             self.load_macro(path)
@@ -1571,10 +1136,7 @@ class App:
 
         x, y, width, height = bounds
 
-        font_name = (
-            ttk.Style().lookup("Treeview", "font")
-            or "TkDefaultFont"
-        )
+        font_name = ttk.Style().lookup("Treeview", "font") or "TkDefaultFont"
 
         font = tkfont.Font(font=font_name)
 
@@ -1584,11 +1146,7 @@ class App:
         center = x + width / 2
         half_width = text_width / 2 + 4
 
-        return (
-            center - half_width
-            <= mouse_x
-            <= center + half_width
-        )
+        return center - half_width <= mouse_x <= center + half_width
 
     def is_rename_click(self, iid, mouse_x):
         bounds = self.tree.bbox(iid, "#0")
@@ -1598,26 +1156,18 @@ class App:
 
         x, y, width, height = bounds
 
-        font_name = (
-            ttk.Style().lookup("Treeview", "font")
-            or "TkDefaultFont"
-        )
+        font_name = ttk.Style().lookup("Treeview", "font") or "TkDefaultFont"
 
         font = tkfont.Font(font=font_name)
         center_y = y + height // 2
 
         for position in range(x, x + width):
-            element = self.tree.identify_element(
-                position, center_y
-            )
+            element = self.tree.identify_element(position, center_y)
 
             if element.endswith("text"):
                 pencil_width = font.measure("✎")
 
-                return (
-                    position <= mouse_x
-                    <= position + pencil_width + 4
-                )
+                return position <= mouse_x <= position + pencil_width + 4
 
         return False
 
@@ -1635,27 +1185,19 @@ class App:
 
         is_folder = path.is_dir()
 
-        old_name = (
-            path.name if is_folder
-            else path.stem
-        )
+        old_name = path.name if is_folder else path.stem
 
         text_x = x
         center_y = y + height // 2
 
         for position in range(x, x + width):
-            element = self.tree.identify_element(
-                position, center_y
-            )
+            element = self.tree.identify_element(position, center_y)
 
             if element.endswith("text"):
                 text_x = position
                 break
 
-        font_name = (
-            ttk.Style().lookup("Treeview", "font")
-            or "TkDefaultFont"
-        )
+        font_name = ttk.Style().lookup("Treeview", "font") or "TkDefaultFont"
 
         font = tkfont.Font(font=font_name)
 
@@ -1669,12 +1211,7 @@ class App:
 
         entry.insert(0, old_name)
 
-        entry.place(
-            x=text_x,
-            y=y,
-            width=max(1, x + width - text_x),
-            height=height
-        )
+        entry.place(x=text_x, y=y, width=max(1, x + width - text_x), height=height)
 
         finished = False
 
@@ -1689,27 +1226,14 @@ class App:
             name = entry.get().strip()
             entry.destroy()
 
-            if (
-                not save
-                or not name
-                or name == old_name
-                or self.runner.is_running()
-            ):
+            if not save or not name or name == old_name or self.runner.is_running():
                 return "break"
 
             try:
                 if is_folder:
-                    destination = (
-                        self.manager.rename_folder(
-                            path, name
-                        )
-                    )
+                    destination = self.manager.rename_folder(path, name)
                 else:
-                    destination = (
-                        self.manager.rename_macro(
-                            path, name
-                        )
-                    )
+                    destination = self.manager.rename_macro(path, name)
 
                 self.current_path = None
                 self.current_data = None
@@ -1718,34 +1242,20 @@ class App:
                 self.refresh_tree(destination)
 
                 if is_folder:
-                    self.tree.item(
-                        str(destination),
-                        open=was_open
-                    )
+                    self.tree.item(str(destination), open=was_open)
 
                 self.on_tree_select()
 
             except Exception as error:
-                messagebox.showerror(
-                    "改名失敗", str(error)
-                )
+                messagebox.showerror("改名失敗", str(error))
 
             return "break"
 
-        entry.bind(
-            "<Return>",
-            lambda event: finish(True)
-        )
+        entry.bind("<Return>", lambda event: finish(True))
 
-        entry.bind(
-            "<Escape>",
-            lambda event: finish(False)
-        )
+        entry.bind("<Escape>", lambda event: finish(False))
 
-        entry.bind(
-            "<FocusOut>",
-            lambda event: finish(True)
-        )
+        entry.bind("<FocusOut>", lambda event: finish(True))
 
         entry.focus_set()
         entry.select_range(0, tk.END)
@@ -1755,9 +1265,7 @@ class App:
             return
 
         if path.is_dir():
-            count = len(
-                self.manager.get_macros(path)
-            )
+            count = len(self.manager.get_macros(path))
 
             message = (
                 f"確定刪除「{path.name}」資料夾？\n\n"
@@ -1766,9 +1274,7 @@ class App:
                 f"並移至根目錄。"
             )
         else:
-            message = (
-                f"確定永久刪除「{path.stem}」？"
-            )
+            message = f"確定永久刪除「{path.stem}」？"
 
         if not messagebox.askyesno("確認刪除", message):
             return
@@ -1799,9 +1305,7 @@ class App:
 
             self.title_var.set(data["name"])
 
-            self.window_var.set(
-                data.get("window_title", "")
-            )
+            self.window_var.set(data.get("window_title", ""))
 
             mode = repeat.get("mode", "once")
 
@@ -1812,9 +1316,7 @@ class App:
 
             self.update_interval_state()
 
-            self.interval_var.set(
-                str(repeat.get("interval", 30))
-            )
+            self.interval_var.set(str(repeat.get("interval", 30)))
 
             self.refresh_commands()
 
@@ -1828,14 +1330,9 @@ class App:
 
         latest = self.manager.load(self.current_path)
 
-        self.current_data["enabled"] = latest.get(
-            "enabled", False
-        )
+        self.current_data["enabled"] = latest.get("enabled", False)
 
-        self.manager.save(
-            self.current_path,
-            self.current_data
-        )
+        self.manager.save(self.current_path, self.current_data)
 
         self.saved_var.set("已自動儲存")
 
@@ -1846,10 +1343,7 @@ class App:
     def update_interval_state(self):
         mode = self.mode_options[self.mode_var.get()]
 
-        self.interval_entry.config(
-            state="normal" if mode == "interval"
-            else "disabled"
-        )
+        self.interval_entry.config(state="normal" if mode == "interval" else "disabled")
 
     def save_settings(self, event=None):
         if self.loading or not self.current_data:
@@ -1865,35 +1359,24 @@ class App:
                 raise ValueError
 
         except ValueError:
-            messagebox.showerror(
-                "設定錯誤",
-                "間隔時間必須為非負數值"
-            )
+            messagebox.showerror("設定錯誤", "間隔時間必須為非負數值")
             return
 
-        self.current_data["window_title"] = (
-            self.window_var.get()
-        )
+        self.current_data["window_title"] = self.window_var.get()
 
         self.current_data["repeat"] = {
             "mode": self.mode_options[self.mode_var.get()],
-            "interval": interval
+            "interval": interval,
         }
 
         self.save_current()
 
     def scroll_commands(self, event):
-        widget = self.root.winfo_containing(
-            event.x_root,
-            event.y_root
-        )
+        widget = self.root.winfo_containing(event.x_root, event.y_root)
 
         while widget is not None:
             if widget == self.command_canvas:
-                self.command_canvas.yview_scroll(
-                    -int(event.delta / 120),
-                    "units"
-                )
+                self.command_canvas.yview_scroll(-int(event.delta / 120), "units")
 
                 return "break"
 
@@ -1906,20 +1389,13 @@ class App:
         if not self.current_data:
             return
 
-        for index, command in enumerate(
-            self.current_data["commands"]
-        ):
+        for index, command in enumerate(self.current_data["commands"]):
             self.create_command_row(index, command)
 
-        self.root.after_idle(
-            self.align_command_fields
-        )
+        self.root.after_idle(self.align_command_fields)
 
     def create_command_row(self, index, command):
-        row = ttk.Frame(
-            self.commands,
-            padding=(5, 4)
-        )
+        row = ttk.Frame(self.commands, padding=(5, 4))
 
         row.pack(fill=tk.X, pady=1)
 
@@ -1928,12 +1404,8 @@ class App:
             background=self.colors["separator"],
             height=1,
             borderwidth=0,
-            highlightthickness=0
-        ).pack(
-            side=tk.BOTTOM,
-            fill=tk.X,
-            pady=(5, 0)
-        )
+            highlightthickness=0,
+        ).pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
 
         handle = ttk.Label(
             row,
@@ -1941,39 +1413,24 @@ class App:
             style="CommandMuted.TLabel",
             cursor="fleur",
             width=3,
-            anchor="center"
+            anchor="center",
         )
 
         handle.pack(side=tk.LEFT)
 
         handle.bind(
-            "<ButtonPress-1>",
-            lambda event: self.start_command_drag(
-                event, index, row
-            )
+            "<ButtonPress-1>", lambda event: self.start_command_drag(event, index, row)
         )
 
-        handle.bind(
-            "<B1-Motion>",
-            self.drag_command
+        handle.bind("<B1-Motion>", self.drag_command)
+
+        handle.bind("<ButtonRelease-1>", self.finish_command_drag)
+
+        labels = {"key": "鍵盤輸入", "click": "滑鼠點擊", "wait": "等待"}
+
+        ttk.Label(row, text=f"{index + 1}. {labels[command['type']]}", width=13).pack(
+            side=tk.LEFT
         )
-
-        handle.bind(
-            "<ButtonRelease-1>",
-            self.finish_command_drag
-        )
-
-        labels = {
-            "key": "鍵盤輸入",
-            "click": "滑鼠點擊",
-            "wait": "等待"
-        }
-
-        ttk.Label(
-            row,
-            text=f"{index + 1}. {labels[command['type']]}",
-            width=13
-        ).pack(side=tk.LEFT)
 
         ttk.Button(
             row,
@@ -1981,72 +1438,38 @@ class App:
             width=3,
             style="CommandDelete.TButton",
             cursor="hand2",
-            command=lambda: self.delete_command(index)
+            command=lambda: self.delete_command(index),
         ).pack(side=tk.RIGHT, padx=1)
 
         content = ttk.Frame(row)
-        content.pack(
-            side=tk.LEFT,
-            fill=tk.X,
-            expand=True
-        )
+        content.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         content.columnconfigure(1, weight=1)
 
         fields = ttk.Frame(content)
-        fields.grid(
-            row=0,
-            column=0,
-            sticky="w"
-        )
+        fields.grid(row=0, column=0, sticky="w")
 
         if command["type"] == "key":
             self.create_key_field(fields, command)
 
-            self.create_number_field(
-                fields,
-                command,
-                "hold_ms",
-                "",
-                "ms"
-            )
+            self.create_number_field(fields, command, "hold_ms", "", "ms")
 
         elif command["type"] == "click":
-            x_var = self.create_number_field(
-                fields, command, "x", "X",
-                integer=True
-            )
+            x_var = self.create_number_field(fields, command, "x", "X", integer=True)
 
-            y_var = self.create_number_field(
-                fields, command, "y", "Y",
-                integer=True
-            )
+            y_var = self.create_number_field(fields, command, "y", "Y", integer=True)
 
             ttk.Button(
                 fields,
                 text="擷取位置",
-                command=lambda: self.capture_position(
-                    command, x_var, y_var
-                )
+                command=lambda: self.capture_position(command, x_var, y_var),
             ).pack(side=tk.LEFT, padx=3)
 
         elif command["type"] == "wait":
-            self.create_number_field(
-                fields,
-                command,
-                "seconds",
-                "",
-                "ms",
-                scale=1000
-            )
+            self.create_number_field(fields, command, "seconds", "", "ms", scale=1000)
 
-        self.create_note_field(
-            content, command
-        ).grid(
-            row=0,
-            column=1,
-            sticky="ew",
-            padx=(8, 5)
+        self.create_note_field(content, command).grid(
+            row=0, column=1, sticky="ew", padx=(8, 5)
         )
 
     def align_command_fields(self):
@@ -2057,49 +1480,29 @@ class App:
         for row in self.commands.winfo_children():
             for widget in row.winfo_children():
                 if isinstance(widget, ttk.Frame):
-                    fields = widget.grid_slaves(
-                        row=0,
-                        column=0
-                    )
+                    fields = widget.grid_slaves(row=0, column=0)
 
                     if fields:
-                        contents.append(
-                            (widget, fields[0])
-                        )
+                        contents.append((widget, fields[0]))
 
         if not contents:
             return
 
-        width = max(
-            fields.winfo_reqwidth()
-            for content, fields in contents
-        )
+        width = max(fields.winfo_reqwidth() for content, fields in contents)
 
         for content, fields in contents:
-            content.columnconfigure(
-                0,
-                minsize=width
-            )
+            content.columnconfigure(0, minsize=width)
 
     def create_note_field(self, parent, command):
-        variable = tk.StringVar(
-            value=command.get("note", "")
-        )
+        variable = tk.StringVar(value=command.get("note", ""))
 
-        entry = ttk.Entry(
-            parent,
-            textvariable=variable,
-            style="Note.TEntry",
-            width=8
-        )
+        entry = ttk.Entry(parent, textvariable=variable, style="Note.TEntry", width=8)
 
         placeholder = ttk.Label(
             entry,
             text="備註",
             foreground=self.colors["muted"],
-            background=ttk.Style().lookup(
-                "TEntry", "fieldbackground"
-            )
+            background=ttk.Style().lookup("TEntry", "fieldbackground"),
         )
 
         def update_placeholder(event=None):
@@ -2133,49 +1536,26 @@ class App:
             command["key"] = key
             self.save_current()
 
-        entry = self.create_key_capture(
-            parent,
-            command.get("key", ""),
-            save_key
-        )
+        entry = self.create_key_capture(parent, command.get("key", ""), save_key)
 
-        entry.configure(
-            width=7,
-            style="Command.TEntry"
-        )
+        entry.configure(width=7, style="Command.TEntry")
 
         entry.pack(side=tk.LEFT, padx=5)
 
-    def create_key_capture(
-        self, parent, initial_value, on_change
-    ):
-        variable = tk.StringVar(
-            value=initial_value
-        )
+    def create_key_capture(self, parent, initial_value, on_change):
+        variable = tk.StringVar(value=initial_value)
 
         entry = ttk.Entry(
-            parent,
-            textvariable=variable,
-            width=20,
-            justify="center",
-            state="readonly"
+            parent, textvariable=variable, width=20, justify="center", state="readonly"
         )
 
-        vk_map = {
-            vk: key for key, vk in KEY_MAP.items()
-        }
+        vk_map = {vk: key for key, vk in KEY_MAP.items()}
 
         vk_map[0x1B] = "ESC"
 
-        vk_map.update({
-            vk: chr(vk)
-            for vk in range(0x41, 0x5B)
-        })
+        vk_map.update({vk: chr(vk) for vk in range(0x41, 0x5B)})
 
-        vk_map.update({
-            vk: chr(vk)
-            for vk in range(0x30, 0x3A)
-        })
+        vk_map.update({vk: chr(vk) for vk in range(0x30, 0x3A)})
 
         get_key_state = ctypes.windll.user32.GetAsyncKeyState
         get_key_state.argtypes = [ctypes.c_int]
@@ -2188,10 +1568,7 @@ class App:
         modifier_order = (0x11, 0x10, 0x12)
 
         def read_pressed():
-            return {
-                vk for vk in vk_map
-                if get_key_state(vk) & 0x8000
-            }
+            return {vk for vk in vk_map if get_key_state(vk) & 0x8000}
 
         def poll_keys():
             nonlocal previous, timer
@@ -2214,18 +1591,11 @@ class App:
 
                     captured.update(current)
 
-                    ordered = [
-                        vk for vk in modifier_order
-                        if vk in captured
-                    ]
+                    ordered = [vk for vk in modifier_order if vk in captured]
 
-                    ordered.extend(
-                        sorted(captured - set(modifier_order))
-                    )
+                    ordered.extend(sorted(captured - set(modifier_order)))
 
-                    key = "+".join(
-                        vk_map[vk] for vk in ordered
-                    )
+                    key = "+".join(vk_map[vk] for vk in ordered)
 
                     variable.set(key)
                     on_change(key)
@@ -2258,63 +1628,43 @@ class App:
         entry.bind("<FocusOut>", stop_capture)
         entry.bind("<Destroy>", stop_capture)
 
-        entry.bind(
-            "<KeyPress>",
-            lambda event: "break"
-        )
+        entry.bind("<KeyPress>", lambda event: "break")
 
-        entry.bind(
-            "<Button-1>",
-            lambda event: entry.focus_set()
-        )
+        entry.bind("<Button-1>", lambda event: entry.focus_set())
 
         return entry
 
     def create_number_field(
-        self, parent, command,
-        key, label, unit="", integer=False,
-        scale=1
+        self, parent, command, key, label, unit="", integer=False, scale=1
     ):
         if label:
-            ttk.Label(
-                parent,
-                text=label
-            ).pack(side=tk.LEFT)
+            ttk.Label(parent, text=label).pack(side=tk.LEFT)
 
         def display_value():
             value = command.get(key, 0) * scale
             return f"{value:g}"
 
-        variable = tk.StringVar(
-            value=display_value()
-        )
+        variable = tk.StringVar(value=display_value())
 
         entry = ttk.Entry(
             parent,
             textvariable=variable,
             width=6,
             style="Command.TEntry",
-            justify="center"
+            justify="center",
         )
 
         entry.pack(side=tk.LEFT, padx=3)
 
         if unit:
-            ttk.Label(
-                parent,
-                text=unit
-            ).pack(side=tk.LEFT, padx=(0, 3))
+            ttk.Label(parent, text=unit).pack(side=tk.LEFT, padx=(0, 3))
 
         def save_value(*args):
             if self.runner.is_running():
                 return
 
             try:
-                value = (
-                    int(variable.get())
-                    if integer
-                    else float(variable.get())
-                )
+                value = int(variable.get()) if integer else float(variable.get())
 
                 if value < 0 or not math.isfinite(value):
                     return
@@ -2322,10 +1672,7 @@ class App:
             except ValueError:
                 return
 
-            command[key] = (
-                value if scale == 1
-                else value / scale
-            )
+            command[key] = value if scale == 1 else value / scale
 
             self.save_current()
 
@@ -2347,20 +1694,9 @@ class App:
             return
 
         defaults = {
-            "鍵盤輸入": {
-                "type": "key",
-                "key": "",
-                "hold_ms": 120
-            },
-            "滑鼠點擊": {
-                "type": "click",
-                "x": 0,
-                "y": 0
-            },
-            "等待": {
-                "type": "wait",
-                "seconds": 1
-            }
+            "鍵盤輸入": {"type": "key", "key": "", "hold_ms": 120},
+            "滑鼠點擊": {"type": "click", "x": 0, "y": 0},
+            "等待": {"type": "wait", "seconds": 1},
         }
 
         command = defaults[self.kind_var.get()]
@@ -2393,7 +1729,7 @@ class App:
         image = ImageGrab.grab(
             bbox=(x, y, x + width, y + height),
             include_layered_windows=True,
-            all_screens=True
+            all_screens=True,
         ).convert("RGB")
 
         preview = tk.Toplevel(self.root)
@@ -2404,12 +1740,7 @@ class App:
 
         photo = ImageTk.PhotoImage(image)
 
-        label = tk.Label(
-            preview,
-            image=photo,
-            borderwidth=0,
-            highlightthickness=0
-        )
+        label = tk.Label(preview, image=photo, borderwidth=0, highlightthickness=0)
 
         label.image = photo
         label.pack()
@@ -2419,15 +1750,10 @@ class App:
             text="",
             background=self.colors["placeholder"],
             relief="solid",
-            borderwidth=1
+            borderwidth=1,
         )
 
-        placeholder.place(
-            x=0,
-            y=0,
-            relwidth=1,
-            relheight=1
-        )
+        placeholder.place(x=0, y=0, relwidth=1, relheight=1)
 
         self.command_drag = {
             "index": index,
@@ -2436,12 +1762,10 @@ class App:
             "preview": preview,
             "placeholder": placeholder,
             "offset_x": event.x_root - x,
-            "offset_y": event.y_root - y
+            "offset_y": event.y_root - y,
         }
 
-        preview.geometry(
-            f"{width}x{height}+{x}+{y}"
-        )
+        preview.geometry(f"{width}x{height}+{x}+{y}")
 
         preview.update_idletasks()
         preview.deiconify()
@@ -2458,21 +1782,14 @@ class App:
 
         drag["preview"].geometry(f"+{x}+{y}")
 
-        rows = [
-            widget
-            for widget in self.commands.pack_slaves()
-            if widget != row
-        ]
+        rows = [widget for widget in self.commands.pack_slaves() if widget != row]
 
         target = len(rows)
 
         center_y = y + row.winfo_height() / 2
 
         for index, widget in enumerate(rows):
-            middle = (
-                widget.winfo_rooty()
-                + widget.winfo_height() / 2
-            )
+            middle = widget.winfo_rooty() + widget.winfo_height() / 2
 
             if center_y < middle:
                 target = index
@@ -2482,14 +1799,10 @@ class App:
             return
 
         if target < len(rows):
-            row.pack_configure(
-                before=rows[target]
-            )
+            row.pack_configure(before=rows[target])
 
         elif rows:
-            row.pack_configure(
-                after=rows[-1]
-            )
+            row.pack_configure(after=rows[-1])
 
         drag["target"] = target
 
@@ -2508,10 +1821,7 @@ class App:
         index = drag["index"]
         target = drag["target"]
 
-        if (
-            self.runner.is_running()
-            or not self.current_data
-        ):
+        if self.runner.is_running() or not self.current_data:
             self.refresh_commands()
             return
 
@@ -2544,10 +1854,7 @@ class App:
         window = find_window(self.window_var.get())
 
         if not window:
-            messagebox.showerror(
-                "擷取失敗",
-                "找不到唯一的目標視窗"
-            )
+            messagebox.showerror("擷取失敗", "找不到唯一的目標視窗")
             return
 
         def receive(x, y):
@@ -2560,16 +1867,9 @@ class App:
             self.save_current()
 
         try:
-            pick_coordinate(
-                self.root,
-                window["hwnd"],
-                receive
-            )
+            pick_coordinate(self.root, window["hwnd"], receive)
         except Exception as error:
-            messagebox.showerror(
-                "擷取失敗",
-                str(error)
-            )
+            messagebox.showerror("擷取失敗", str(error))
 
     def register_hotkey(self):
         hotkeys = []
@@ -2581,13 +1881,8 @@ class App:
         for path in self.manager.get_all_macros():
             macro = self.manager.load_macro(path)
 
-            if (
-                macro.get("enabled", False)
-                or path.resolve() in running_paths
-            ):
-                hotkeys.append(
-                    macro.get("hotkey", "")
-                )
+            if macro.get("enabled", False) or path.resolve() in running_paths:
+                hotkeys.append(macro.get("hotkey", ""))
 
         try:
             errors = self.hotkey.start(hotkeys)
@@ -2617,9 +1912,7 @@ class App:
         if not path or not path.is_file():
             return
 
-        bounds = self.tree.bbox(
-            str(path), "hotkey"
-        )
+        bounds = self.tree.bbox(str(path), "hotkey")
 
         if not bounds:
             return
@@ -2635,27 +1928,15 @@ class App:
             nonlocal value
             value = key
 
-        entry = self.create_key_capture(
-            self.tree,
-            "",
-            receive_key
-        )
+        entry = self.create_key_capture(self.tree, "", receive_key)
 
         self.macro_hotkey_entry = entry
 
-        entry.configure(
-            justify="center",
-            width=18
-        )
+        entry.configure(justify="center", width=18)
 
         x, y, width, height = bounds
 
-        entry.place(
-            x=x,
-            y=y,
-            width=width,
-            height=height
-        )
+        entry.place(x=x, y=y, width=width, height=height)
 
         finished = False
         click_binding = None
@@ -2672,10 +1953,7 @@ class App:
                 value = old
 
             if click_binding is not None:
-                self.root.unbind(
-                    "<Button-1>",
-                    click_binding
-                )
+                self.root.unbind("<Button-1>", click_binding)
 
             self.macro_hotkey_entry = None
             entry.destroy()
@@ -2701,15 +1979,10 @@ class App:
                     self.current_data["hotkey"] = value
 
                 if self.tree.exists(str(path)):
-                    self.tree.set(
-                        str(path), "hotkey", value or "—"
-                    )
+                    self.tree.set(str(path), "hotkey", value or "—")
 
             except Exception as error:
-                messagebox.showerror(
-                    "快捷鍵設定失敗",
-                    str(error)
-                )
+                messagebox.showerror("快捷鍵設定失敗", str(error))
 
             self.register_hotkey()
             self.update_status()
@@ -2722,24 +1995,13 @@ class App:
             if event.widget != entry:
                 finish()
 
-        entry.bind(
-            "<FocusOut>",
-            finish,
-            add="+"
-        )
+        entry.bind("<FocusOut>", finish, add="+")
 
         entry.bind("<Return>", confirm)
 
-        entry.bind(
-            "<Escape>",
-            lambda event: (finish(cancel=True), "break")[1]
-        )
+        entry.bind("<Escape>", lambda event: (finish(cancel=True), "break")[1])
 
-        click_binding = self.root.bind(
-            "<Button-1>",
-            outside_click,
-            add="+"
-        )
+        click_binding = self.root.bind("<Button-1>", outside_click, add="+")
 
         entry.focus_set()
         entry.select_range(0, tk.END)
@@ -2778,18 +2040,10 @@ class App:
         for path in self.manager.get_all_macros():
             macro = self.manager.load_macro(path)
 
-            if (
-                macro.get("hotkey")
-                and self.hotkey.parse(
-                    macro["hotkey"]
-                ) == binding
-            ):
+            if macro.get("hotkey") and self.hotkey.parse(macro["hotkey"]) == binding:
                 matched[path] = macro
 
-        running = [
-            path for path in matched
-            if self.runner.is_macro_running(path)
-        ]
+        running = [path for path in matched if self.runner.is_macro_running(path)]
 
         if running:
             for path in running:
@@ -2812,35 +2066,27 @@ class App:
                 text="執行",
                 state="disabled",
                 background=self.colors["green_disabled"],
-                cursor="arrow"
+                cursor="arrow",
             )
 
             self.macro_status_light.delete("all")
 
-            self.macro_status_light.configure(
-                cursor=""
-            )
+            self.macro_status_light.configure(cursor="")
 
             return
 
         macro = self.current_data
 
-        running = self.runner.is_macro_running(
-            self.current_path
-        )
+        running = self.runner.is_macro_running(self.current_path)
 
         enabled = macro.get("enabled", False)
 
         self.draw_status_light(
             self.macro_status_light,
-            "running" if running
-            else "enabled" if enabled
-            else "idle"
+            "running" if running else "enabled" if enabled else "idle",
         )
 
-        self.macro_status_light.configure(
-            cursor="" if running else "hand2"
-        )
+        self.macro_status_light.configure(cursor="" if running else "hand2")
 
         text = "停止" if running else "執行"
 
@@ -2848,18 +2094,14 @@ class App:
             text=text,
             state="normal",
             background=self.colors["green"][0],
-            cursor="hand2"
+            cursor="hand2",
         )
 
     def update_tree_separators(self):
-        self.tree_header_separator.configure(
-            background=self.colors["separator"]
-        )
+        self.tree_header_separator.configure(background=self.colors["separator"])
 
         for separator in self.tree_separators.values():
-            separator.configure(
-                background=self.colors["separator"]
-            )
+            separator.configure(background=self.colors["separator"])
 
         header_y = 0
 
@@ -2874,10 +2116,7 @@ class App:
 
         if header_y:
             self.tree_header_separator.place(
-                x=1,
-                y=header_y,
-                width=self.tree.winfo_width() - 2,
-                height=1
+                x=1, y=header_y, width=self.tree.winfo_width() - 2, height=1
             )
         else:
             self.tree_header_separator.place_forget()
@@ -2910,15 +2149,10 @@ class App:
                     self.tree,
                     background=self.colors["separator"],
                     height=1,
-                    borderwidth=0
+                    borderwidth=0,
                 )
 
-            self.tree_separators[iid].place(
-                x=x,
-                y=line_y,
-                width=width,
-                height=1
-            )
+            self.tree_separators[iid].place(x=x, y=line_y, width=width, height=1)
 
         for iid in list(self.tree_separators):
             if iid not in visible:
@@ -2953,15 +2187,14 @@ class App:
 
         self.root.focus_set()
 
+        self.tree.selection_set(str(path))
+
         self.toggle_enabled(path)
 
         return "break"
 
     def scroll_tree_status(self, event):
-        self.tree.yview_scroll(
-            -int(event.delta / 120),
-            "units"
-        )
+        self.tree.yview_scroll(-int(event.delta / 120), "units")
 
         self.update_tree_status()
 
@@ -2981,19 +2214,13 @@ class App:
                 for child in self.tree.get_children(iid)
             )
 
-            enabled = self.tree.set(iid, "check") in (
-                "☑", "▣"
-            )
+            enabled = self.tree.set(iid, "check") in ("☑", "▣")
 
         else:
             running = self.runner.is_macro_running(path)
             enabled = self.tree.set(iid, "check") == "☑"
 
-        status = (
-            "running" if running
-            else "enabled" if enabled
-            else "idle"
-        )
+        status = "running" if running else "enabled" if enabled else "idle"
 
         x, y, width, height = bounds
 
@@ -3006,16 +2233,9 @@ class App:
         if iid not in self.tree_status_lights:
             canvas = self.create_status_light(self.tree)
 
-            canvas.bind(
-                "<Button-1>",
-                lambda event, p=path:
-                    self.on_status_click(p)
-            )
+            canvas.bind("<Button-1>", lambda event: "break")
 
-            canvas.bind(
-                "<MouseWheel>",
-                self.scroll_tree_status
-            )
+            canvas.bind("<MouseWheel>", self.scroll_tree_status)
 
             self.tree_status_lights[iid] = canvas
 
@@ -3026,24 +2246,19 @@ class App:
         background = style.lookup(
             "Treeview",
             "background",
-            ("selected",) if iid in self.tree.selection()
-            else ()
+            ("selected",) if iid in self.tree.selection() else (),
         )
 
         if "drop_target" in self.tree.item(iid, "tags"):
             background = self.colors["drop_target"]
 
         canvas.configure(
-            background=background or "#FFFFFF",
-            cursor="" if running else "hand2"
+            background=background or "#FFFFFF", cursor="" if running else "hand2"
         )
 
         self.draw_status_light(canvas, status)
 
-        canvas.place(
-            x=center_x - 9,
-            y=center_y - 9
-        )
+        canvas.place(x=center_x - 9, y=center_y - 9)
 
         return True
 
@@ -3065,13 +2280,9 @@ class App:
         except Empty:
             pass
 
-        if (
-            not getattr(self, "closing", False)
-            and self.macro_hotkey_entry is None
-        ):
-            if (
-                self.runner.get_running_paths()
-                != getattr(self, "registered_running_paths", set())
+        if not getattr(self, "closing", False) and self.macro_hotkey_entry is None:
+            if self.runner.get_running_paths() != getattr(
+                self, "registered_running_paths", set()
             ):
                 self.register_hotkey()
 
