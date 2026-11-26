@@ -56,6 +56,7 @@ class App:
         self.drag_target = None
 
         self.command_drag = None
+        self.range_drag = None
         self.last_running = False
 
         self.windows = []
@@ -595,7 +596,7 @@ class App:
         self.kind_combo = ttk.Combobox(
             command_header,
             textvariable=self.kind_var,
-            values=("鍵盤輸入", "滑鼠點擊", "等待"),
+            values=("鍵盤輸入", "滑鼠點擊", "等待", "範圍重複執行"),
             state="readonly",
             width=10,
         )
@@ -1415,7 +1416,28 @@ class App:
         for index, command in enumerate(self.current_data["commands"]):
             self.create_command_row(index, command)
 
+        self.draw_saved_range_markers()
         self.root.after_idle(self.align_command_fields)
+
+    def draw_saved_range_markers(self):
+        commands = self.current_data["commands"]
+        rows = self.commands.pack_slaves()
+
+        for index, command in enumerate(commands):
+            if command["type"] != "repeat_range":
+                continue
+
+            count = command.get("range_count", 0)
+
+            for row in rows[index + 1 : index + 1 + count]:
+                marker = tk.Frame(
+                    row,
+                    background="#4A90D9",
+                    width=4,
+                    borderwidth=0,
+                )
+
+                marker.place(x=0, y=0, relheight=1)
 
     def create_command_row(self, index, command):
         row = ttk.Frame(self.commands, padding=(5, 4))
@@ -1449,7 +1471,12 @@ class App:
 
         handle.bind("<ButtonRelease-1>", self.finish_command_drag)
 
-        labels = {"key": "鍵盤輸入", "click": "滑鼠點擊", "wait": "等待"}
+        labels = {
+            "key": "鍵盤輸入",
+            "click": "滑鼠點擊",
+            "wait": "等待",
+            "repeat_range": "範圍重複執行",
+        }
 
         ttk.Label(row, text=f"{index + 1}. {labels[command['type']]}", width=13).pack(
             side=tk.LEFT
@@ -1491,9 +1518,26 @@ class App:
         elif command["type"] == "wait":
             self.create_number_field(fields, command, "seconds", "", "ms", scale=1000)
 
+        elif command["type"] == "repeat_range":
+            self.create_number_field(fields, command, "count", "重複", integer=True)
+            ttk.Label(fields, text="次").pack(side=tk.LEFT)
+
         self.create_note_field(content, command).grid(
             row=0, column=1, sticky="ew", padx=(8, 5)
         )
+
+        if command["type"] == "repeat_range":
+            range_handle = ttk.Label(
+                content,
+                text=f"━━━━━━  拖曳設定範圍（目前 {command.get('range_count', 0)} 列）  ━━━━━━",
+                style="CommandMuted.TLabel",
+                cursor="sizing",
+                anchor="center",
+            )
+            range_handle.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+            range_handle.bind("<ButtonPress-1>", self.start_range_drag)
+            range_handle.bind("<B1-Motion>", self.drag_range)
+            range_handle.bind("<ButtonRelease-1>", self.finish_range_drag)
 
     def align_command_fields(self):
         self.root.update_idletasks()
@@ -1720,6 +1764,7 @@ class App:
             "鍵盤輸入": {"type": "key", "key": "", "hold_ms": 120},
             "滑鼠點擊": {"type": "click", "x": 0, "y": 0},
             "等待": {"type": "wait", "seconds": 1},
+            "範圍重複執行": {"type": "repeat_range", "count": 5},
         }
 
         command = defaults[self.kind_var.get()]
@@ -1858,6 +1903,142 @@ class App:
 
         self.refresh_commands()
 
+    def start_range_drag(self, event):
+        if self.runner.is_running() or not self.current_data:
+            return
+
+        handle = event.widget
+        row = handle.master.master
+
+        rows = self.commands.pack_slaves()
+        index = rows.index(row)
+
+        if index >= len(rows) - 1:
+            return
+
+        self.range_drag = {
+            "index": index,
+            "count": 1,
+            "markers": [],
+        }
+
+        self.update_range_highlights()
+
+    def drag_range(self, event):
+        if self.range_drag is None:
+            return
+
+        rows = self.commands.pack_slaves()
+        index = self.range_drag["index"]
+
+        count = 0
+
+        for row in rows[index + 1 :]:
+            middle = row.winfo_rooty() + row.winfo_height() / 2
+
+            if event.y_root >= middle:
+                count += 1
+
+        count = max(1, min(count, len(rows) - index - 1))
+
+        self.range_drag["count"] = count
+
+        self.update_range_highlights()
+
+    def update_range_highlights(self):
+        if self.range_drag is None:
+            return
+
+        self.clear_range_highlights()
+
+        rows = self.commands.pack_slaves()
+        index = self.range_drag["index"]
+        count = self.range_drag["count"]
+
+        for row in rows[index + 1 : index + 1 + count]:
+            marker = tk.Frame(
+                row,
+                background=self.colors["placeholder"],
+                highlightbackground="#4A90D9",
+                highlightthickness=2,
+            )
+
+            marker.place(x=0, y=0, relwidth=1, relheight=1)
+
+            self.range_drag["markers"].append(marker)
+
+    def clear_range_highlights(self):
+        if self.range_drag is None:
+            return
+
+        for marker in self.range_drag.get("markers", []):
+            marker.destroy()
+
+        self.range_drag["markers"] = []
+
+    def finish_range_drag(self, event):
+        if self.range_drag is None:
+            return
+
+        drag = self.range_drag
+
+        self.clear_range_highlights()
+
+        if self.runner.is_running() or not self.current_data:
+            self.range_drag = None
+            return
+
+        index = drag["index"]
+        count = drag["count"]
+
+        command = self.current_data["commands"][index]
+        command["range_count"] = count
+
+        self.range_drag = None
+
+        self.save_current()
+        self.refresh_commands()
+
+    def finish_command_drag(self, event):
+        if self.command_drag is None:
+            return
+
+        drag = self.command_drag
+        self.command_drag = None
+
+        drag["preview"].destroy()
+        drag["placeholder"].destroy()
+
+        index = drag["index"]
+        target = drag["target"]
+
+        if self.runner.is_running() or not self.current_data:
+            self.refresh_commands()
+            return
+
+        if index != target:
+            commands = self.current_data["commands"]
+
+            for i, command in enumerate(commands):
+                if command["type"] != "repeat_range":
+                    continue
+
+                count = command.get("range_count", 0)
+
+                if i < index <= i + count:
+                    if target > i + count:
+                        command["range_count"] = max(0, count - 1)
+                elif i < target <= i + count:
+                    if index > i + count:
+                        command["range_count"] = count + 1
+
+            command = commands.pop(index)
+            commands.insert(target, command)
+
+            self.save_current()
+
+        self.refresh_commands()
+
     def delete_command(self, index):
         if self.runner.is_running():
             return
@@ -1865,7 +2046,18 @@ class App:
         if not self.current_data:
             return
 
-        self.current_data["commands"].pop(index)
+        commands = self.current_data["commands"]
+
+        for i, command in enumerate(commands):
+            if command["type"] != "repeat_range" or i == index:
+                continue
+
+            count = command.get("range_count", 0)
+
+            if i < index <= i + count:
+                command["range_count"] = max(0, count - 1)
+
+        commands.pop(index)
 
         self.save_current()
         self.refresh_commands()
@@ -2256,7 +2448,7 @@ class App:
         if iid not in self.tree_status_lights:
             canvas = self.create_status_light(self.tree)
 
-            canvas.bind("<Button-1>", lambda event: "break")
+            canvas.bind("<Button-1>", lambda event: self.on_status_click(path))
 
             canvas.bind("<MouseWheel>", self.scroll_tree_status)
 
