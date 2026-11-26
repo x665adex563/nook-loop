@@ -1848,26 +1848,31 @@ class App:
         drag = self.command_drag
         row = drag["row"]
 
-        rows = [widget for widget in self.command_rows() if widget != row]
+        widgets = [widget for widget in self.commands.pack_slaves() if widget != row]
 
-        target = len(rows)
+        insertion = len(widgets)
 
-        for index, widget in enumerate(rows):
+        for index, widget in enumerate(widgets):
             middle = widget.winfo_rooty() + widget.winfo_height() / 2
 
             if event.y_root < middle:
-                target = index
+                insertion = index
                 break
 
-        if target != drag["target"]:
-            if target < len(rows):
-                row.pack_configure(before=rows[target])
-            elif rows:
-                row.pack_configure(after=rows[-1])
+        if insertion < len(widgets):
+            row.pack_configure(before=widgets[insertion])
+        elif widgets:
+            row.pack_configure(after=widgets[-1])
 
-            drag["target"] = target
+        target = sum(
+            1
+            for widget in widgets[:insertion]
+            if getattr(widget, "is_command_row", False)
+        )
 
-            self.root.update_idletasks()
+        drag["target"] = target
+
+        self.root.update_idletasks()
 
         # Update command numbers.
         for index, command_row in enumerate(self.command_rows()):
@@ -2050,17 +2055,16 @@ class App:
             self.refresh_commands()
             return
 
+        commands = self.current_data["commands"]
+
+        for command_index, count in drag["range_counts"].items():
+            commands[command_index]["range_count"] = count
+
         if index != target:
-            commands = self.current_data["commands"]
-
-            for command_index, count in drag["range_counts"].items():
-                commands[command_index]["range_count"] = count
-
             command = commands.pop(index)
             commands.insert(target, command)
 
-            self.save_current()
-
+        self.save_current()
         self.refresh_commands()
 
     def delete_command(self, index):
