@@ -266,6 +266,7 @@ class App:
         style = ttk.Style()
 
         style.configure("CommandMuted.TLabel", foreground=self.colors["muted"])
+
         style.configure(
             "RangeHandle.TLabel",
             foreground="#4A90D9",
@@ -1490,7 +1491,17 @@ class App:
                 marker.place(x=0, y=0, relheight=1)
 
     def create_command_row(self, index, command):
-        row = ttk.Frame(self.commands, padding=(5, 4))
+        frame_bg = ttk.Style().lookup("TFrame", "background")
+
+        row = tk.Frame(
+            self.commands,
+            background=frame_bg,
+            padx=5,
+            pady=4,
+            highlightthickness=0,
+            highlightbackground="#6AA9FF",
+            highlightcolor="#6AA9FF",
+        )
         row.is_command_row = True
         row.command_index = index
         row.pack(fill=tk.X, pady=1)
@@ -1828,7 +1839,7 @@ class App:
             },
         }
 
-        row.configure(relief="solid", borderwidth=2)
+        row.configure(highlightthickness=2)
 
     def drag_command(self, event):
         if self.command_drag is None:
@@ -1931,31 +1942,6 @@ class App:
                 marker.range_controller_index = handle.range_command_index
                 marker.place(x=0, y=0, relheight=1)
 
-    def finish_command_drag(self, event):
-        if self.command_drag is None:
-            return
-
-        drag = self.command_drag
-        self.command_drag = None
-
-        index = drag["index"]
-        target = drag["target"]
-
-        if self.runner.is_running() or not self.current_data:
-            self.refresh_commands()
-            return
-
-        if index != target:
-            commands = self.current_data["commands"]
-
-            for command_index, count in drag["range_counts"].items():
-                commands[command_index]["range_count"] = count
-
-            command = commands.pop(index)
-            commands.insert(target, command)
-
-            self.save_current()
-
     def start_range_drag(self, event):
         if self.runner.is_running() or not self.current_data:
             return
@@ -2057,9 +2043,6 @@ class App:
         drag = self.command_drag
         self.command_drag = None
 
-        drag["preview"].destroy()
-        drag["placeholder"].destroy()
-
         index = drag["index"]
         target = drag["target"]
 
@@ -2070,7 +2053,6 @@ class App:
         if index != target:
             commands = self.current_data["commands"]
 
-            # Apply the range counts calculated during drag preview.
             for command_index, count in drag["range_counts"].items():
                 commands[command_index]["range_count"] = count
 
