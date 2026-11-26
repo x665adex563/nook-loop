@@ -1450,6 +1450,7 @@ class App:
 
             handle.is_range_handle = True
             handle.range_command_index = index
+            handle.range_controller_row = rows[index]
 
             handle.bind("<ButtonPress-1>", self.start_range_drag)
             handle.bind("<B1-Motion>", self.drag_range)
@@ -1523,9 +1524,12 @@ class App:
             "wait": "等待",
             "repeat_range": "範圍重複執行",
         }
-        ttk.Label(row, text=f"{index + 1}. {labels[command['type']]}", width=13).pack(
-            side=tk.LEFT
+        row.number_label = ttk.Label(
+            row,
+            text=f"{index + 1}. {labels[command['type']]}",
+            width=13,
         )
+        row.number_label.pack(side=tk.LEFT)
 
         ttk.Button(
             row,
@@ -1812,56 +1816,19 @@ class App:
             return
 
         self.root.focus_set()
-        self.root.update_idletasks()
-
-        x = row.winfo_rootx()
-        y = row.winfo_rooty()
-        width = row.winfo_width()
-        height = row.winfo_height()
-
-        image = ImageGrab.grab(
-            bbox=(x, y, x + width, y + height),
-            include_layered_windows=True,
-            all_screens=True,
-        ).convert("RGB")
-
-        preview = tk.Toplevel(self.root)
-        preview.withdraw()
-
-        preview.overrideredirect(True)
-        preview.attributes("-topmost", True)
-
-        photo = ImageTk.PhotoImage(image)
-
-        label = tk.Label(preview, image=photo, borderwidth=0, highlightthickness=0)
-
-        label.image = photo
-        label.pack()
-
-        placeholder = tk.Label(
-            row,
-            text="",
-            background=self.colors["placeholder"],
-            relief="solid",
-            borderwidth=1,
-        )
-
-        placeholder.place(x=0, y=0, relwidth=1, relheight=1)
 
         self.command_drag = {
             "index": index,
             "target": index,
             "row": row,
-            "preview": preview,
-            "placeholder": placeholder,
-            "offset_x": event.x_root - x,
-            "offset_y": event.y_root - y,
+            "range_counts": {
+                command_index: command.get("range_count", 0)
+                for command_index, command in enumerate(self.current_data["commands"])
+                if command["type"] == "repeat_range"
+            },
         }
 
-        preview.geometry(f"{width}x{height}+{x}+{y}")
-
-        preview.update_idletasks()
-        preview.deiconify()
+        row.configure(relief="solid", borderwidth=2)
 
     def drag_command(self, event):
         if self.command_drag is None:
@@ -1870,13 +1837,6 @@ class App:
         drag = self.command_drag
         row = drag["row"]
 
-        x = event.x_root - drag["offset_x"]
-        y = event.y_root - drag["offset_y"]
-
-        drag["preview"].geometry(f"+{x}+{y}")
-
-        center_y = y + row.winfo_height() / 2
-
         rows = [widget for widget in self.command_rows() if widget != row]
 
         target = len(rows)
@@ -1884,7 +1844,7 @@ class App:
         for index, widget in enumerate(rows):
             middle = widget.winfo_rooty() + widget.winfo_height() / 2
 
-            if center_y < middle:
+            if event.y_root < middle:
                 target = index
                 break
 
@@ -1898,30 +1858,57 @@ class App:
 
             self.root.update_idletasks()
 
-        # Rebuild range markers according to the current widget order.
-        for command_row in self.command_rows():
-            for marker in command_row.winfo_children():
-                if hasattr(marker, "range_controller_index"):
-                    marker.destroy()
+        # Update command numbers.
+        for index, command_row in enumerate(self.command_rows()):
+            label_text = command_row.number_label.cget("text")
+            command_name = label_text.split(". ", 1)[1]
 
+            command_row.number_label.configure(text=f"{index + 1}. {command_name}")
+
+        # Update range counts according to current widget order.
         widgets = self.commands.pack_slaves()
 
         for handle in widgets:
             if not getattr(handle, "is_range_handle", False):
                 continue
 
-            controller_index = handle.range_command_index
+            controller_row = handle.range_controller_row
 
-            controller_row = next(
-                (
-                    widget
-                    for widget in widgets
-                    if getattr(widget, "command_index", None) == controller_index
-                ),
-                None,
-            )
+            if controller_row not in widgets:
+                continue
 
-            if controller_row is None:
+            start = widgets.index(controller_row)
+            end = widgets.index(handle)
+
+            if end <= start:
+                count = 0
+            else:
+                count = sum(
+                    1
+                    for widget in widgets[start + 1 : end]
+                    if getattr(widget, "is_command_row", False)
+                )
+
+            drag["range_counts"][handle.range_command_index] = count
+
+            handle.configure(text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑")
+
+        # Remove existing range markers.
+        for command_row in self.command_rows():
+            for marker in command_row.winfo_children():
+                if hasattr(marker, "range_controller_index"):
+                    marker.destroy()
+
+        # Redraw range markers according to current widget order.
+        widgets = self.commands.pack_slaves()
+
+        for handle in widgets:
+            if not getattr(handle, "is_range_handle", False):
+                continue
+
+            controller_row = handle.range_controller_row
+
+            if controller_row not in widgets:
                 continue
 
             start = widgets.index(controller_row)
@@ -1940,7 +1927,8 @@ class App:
                     width=4,
                     borderwidth=0,
                 )
-                marker.range_controller_index = controller_index
+
+                marker.range_controller_index = handle.range_command_index
                 marker.place(x=0, y=0, relheight=1)
 
     def finish_command_drag(self, event):
@@ -1949,9 +1937,6 @@ class App:
 
         drag = self.command_drag
         self.command_drag = None
-
-        drag["preview"].destroy()
-        drag["placeholder"].destroy()
 
         index = drag["index"]
         target = drag["target"]
@@ -1963,25 +1948,13 @@ class App:
         if index != target:
             commands = self.current_data["commands"]
 
-            for i, command in enumerate(commands):
-                if command["type"] != "repeat_range":
-                    continue
-
-                count = command.get("range_count", 0)
-
-                if i < index <= i + count:
-                    if target > i + count:
-                        command["range_count"] = max(0, count - 1)
-                elif i < target <= i + count:
-                    if index > i + count:
-                        command["range_count"] = count + 1
+            for command_index, count in drag["range_counts"].items():
+                commands[command_index]["range_count"] = count
 
             command = commands.pop(index)
             commands.insert(target, command)
 
             self.save_current()
-
-        self.refresh_commands()
 
     def start_range_drag(self, event):
         if self.runner.is_running() or not self.current_data:
@@ -2097,18 +2070,9 @@ class App:
         if index != target:
             commands = self.current_data["commands"]
 
-            for i, command in enumerate(commands):
-                if command["type"] != "repeat_range":
-                    continue
-
-                count = command.get("range_count", 0)
-
-                if i < index <= i + count:
-                    if target > i + count:
-                        command["range_count"] = max(0, count - 1)
-                elif i < target <= i + count:
-                    if index > i + count:
-                        command["range_count"] = count + 1
+            # Apply the range counts calculated during drag preview.
+            for command_index, count in drag["range_counts"].items():
+                commands[command_index]["range_count"] = count
 
             command = commands.pop(index)
             commands.insert(target, command)
