@@ -637,13 +637,11 @@ class App:
 
         self.command_canvas = tk.Canvas(command_area, highlightthickness=0)
 
-        scrollbar = ttk.Scrollbar(
+        self.command_scrollbar = ttk.Scrollbar(
             command_area, orient=tk.VERTICAL, command=self.command_canvas.yview
         )
 
-        self.command_canvas.configure(yscrollcommand=scrollbar.set)
-
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.command_canvas.configure(yscrollcommand=self.command_scrollbar.set)
 
         self.command_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -653,12 +651,9 @@ class App:
             (0, 0), window=self.commands, anchor="nw"
         )
 
-        self.commands.bind(
-            "<Configure>",
-            lambda event: self.command_canvas.configure(
-                scrollregion=self.command_canvas.bbox("all")
-            ),
-        )
+        self.commands.bind("<Configure>", self.update_command_scrollbar)
+
+        self.command_canvas.bind("<Configure>", self.update_command_scrollbar)
 
         self.command_canvas.bind(
             "<Configure>",
@@ -1402,13 +1397,35 @@ class App:
 
         self.save_current()
 
+    def update_command_scrollbar(self, event=None):
+        bbox = self.command_canvas.bbox("all")
+
+        if not bbox:
+            return
+
+        self.command_canvas.configure(scrollregion=bbox)
+
+        content_height = bbox[3] - bbox[1]
+        canvas_height = self.command_canvas.winfo_height()
+
+        if content_height > canvas_height:
+            if not self.command_scrollbar.winfo_ismapped():
+                self.command_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        else:
+            if self.command_scrollbar.winfo_ismapped():
+                self.command_scrollbar.pack_forget()
+
+            self.command_canvas.yview_moveto(0)
+
     def scroll_commands(self, event):
         widget = self.root.winfo_containing(event.x_root, event.y_root)
 
         while widget is not None:
             if widget == self.command_canvas:
-                self.command_canvas.yview_scroll(-int(event.delta / 120), "units")
+                if not self.command_scrollbar.winfo_ismapped():
+                    return "break"
 
+                self.command_canvas.yview_scroll(-int(event.delta / 120), "units")
                 return "break"
 
             widget = getattr(widget, "master", None)
