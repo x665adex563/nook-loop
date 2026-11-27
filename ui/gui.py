@@ -1845,10 +1845,31 @@ class App:
 
         self.root.focus_set()
 
+        group = [row]
+
+        if self.current_data["commands"][index]["type"] == "repeat_range":
+            widgets = self.commands.pack_slaves()
+
+            handle = next(
+                (
+                    widget
+                    for widget in widgets
+                    if getattr(widget, "is_range_handle", False)
+                    and widget.range_controller_row == row
+                ),
+                None,
+            )
+
+            if handle is not None:
+                start = widgets.index(row)
+                end = widgets.index(handle)
+                group = widgets[start : end + 1]
+
         self.command_drag = {
             "index": index,
             "target": index,
             "row": row,
+            "group": group,
             "range_counts": {
                 command_index: command.get("range_count", 0)
                 for command_index, command in enumerate(self.current_data["commands"])
@@ -1865,7 +1886,13 @@ class App:
         drag = self.command_drag
         row = drag["row"]
 
-        widgets = [widget for widget in self.commands.pack_slaves() if widget != row]
+        group = drag["group"]
+
+        widgets = [
+            widget
+            for widget in self.commands.pack_slaves()
+            if widget not in group
+        ]
 
         insertion = len(widgets)
 
@@ -1876,10 +1903,20 @@ class App:
                 insertion = index
                 break
 
-        if insertion < len(widgets):
-            row.pack_configure(before=widgets[insertion])
+        anchor = widgets[insertion] if insertion < len(widgets) else None
+
+        if anchor:
+            for widget in group:
+                widget.pack_configure(before=anchor)
         elif widgets:
-            row.pack_configure(after=widgets[-1])
+            previous = widgets[-1]
+
+            for widget in group:
+                widget.pack_configure(after=previous)
+                previous = widget
+        else:
+            for widget in group:
+                widget.pack_configure()
 
         target = sum(
             1
@@ -2078,8 +2115,10 @@ class App:
             commands[command_index]["range_count"] = count
 
         if index != target:
-            command = commands.pop(index)
-            commands.insert(target, command)
+            group_commands = commands[index : index + len(drag["group"]) - 1]
+
+            del commands[index : index + len(group_commands)]
+            commands[target:target] = group_commands
 
         self.save_current()
         self.refresh_commands()
