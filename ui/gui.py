@@ -1458,21 +1458,29 @@ class App:
 
             count = max(0, command.get("range_count", 0))
 
-            handle = ttk.Label(
+            handle = tk.Frame(
                 self.commands,
+                background=ttk.Style().lookup("TFrame", "background"),
+                padx=0,
+                pady=0,
+            )
+
+            handle.label = ttk.Label(
+                handle,
                 text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑",
                 style="RangeHandle.TLabel",
                 cursor="sizing",
                 anchor="center",
             )
+            handle.label.pack(fill=tk.X)
 
             handle.is_range_handle = True
             handle.range_command_index = index
             handle.range_controller_row = rows[index]
 
-            handle.bind("<ButtonPress-1>", self.start_range_drag)
-            handle.bind("<B1-Motion>", self.drag_range)
-            handle.bind("<ButtonRelease-1>", self.finish_range_drag)
+            handle.label.bind("<ButtonPress-1>", self.start_range_drag)
+            self.root.bind_all("<B1-Motion>", self.drag_range)
+            handle.label.bind("<ButtonRelease-1>", self.finish_range_drag)
 
             handle.pack(fill=tk.X, pady=1)
 
@@ -1845,7 +1853,15 @@ class App:
 
         self.root.focus_set()
 
+        ttk.Style().configure(
+            "RangeDragHighlight.TLabel",
+            background="#2B3038",
+            relief="solid",
+            borderwidth=2,
+        )
+
         group = [row]
+        handle = None
 
         if self.current_data["commands"][index]["type"] == "repeat_range":
             widgets = self.commands.pack_slaves()
@@ -1877,7 +1893,20 @@ class App:
             },
         }
 
-        row.configure(highlightthickness=2)
+        for command_row in group:
+            if getattr(command_row, "is_command_row", False):
+                command_row.configure(
+                    highlightthickness=2,
+                    highlightbackground="#4A90D9",
+                    highlightcolor="#4A90D9",
+                )
+
+        if handle is not None:
+            handle.configure(
+                background="#4A90D9",
+                padx=2,
+                pady=2,
+            )
 
     def drag_command(self, event):
         if self.command_drag is None:
@@ -1961,7 +1990,7 @@ class App:
 
             drag["range_counts"][handle.range_command_index] = count
 
-            handle.configure(text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑")
+            handle.label.configure(text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑")
 
         # Remove existing range markers.
         for command_row in self.command_rows():
@@ -2001,11 +2030,13 @@ class App:
                 marker.range_controller_index = handle.range_command_index
                 marker.place(x=0, y=0, relheight=1)
 
+        self.root.update_idletasks()
+
     def start_range_drag(self, event):
         if self.runner.is_running() or not self.current_data:
             return
 
-        handle = event.widget
+        handle = event.widget.master
         index = handle.range_command_index
         rows = self.command_rows()
 
@@ -2039,7 +2070,9 @@ class App:
 
         count = max(0, min(count, len(rows) - index - 1))
         self.range_drag["count"] = count
-        self.range_drag["handle"].configure(text=f"⠿  拖曳設定範圍  ·  {count} 列")
+        self.range_drag["handle"].label.configure(
+            text=f"↑  ⠿  拖曳設定範圍  ·  {count} 列  ↑"
+        )
         self.update_range_highlights()
 
     def update_range_highlights(self):
@@ -2052,9 +2085,19 @@ class App:
         count = self.range_drag["count"]
 
         for row in rows[index + 1 : index + 1 + count]:
-            marker = tk.Frame(row, background="#4A90D9", width=3, borderwidth=0)
-            marker.place(x=0, y=0, relheight=1)
-            self.range_drag["markers"].append(marker)
+            markers = [
+                tk.Frame(row, background="#4A90D9", height=3),
+                tk.Frame(row, background="#4A90D9", height=3),
+                tk.Frame(row, background="#4A90D9", width=3),
+                tk.Frame(row, background="#4A90D9", width=3),
+            ]
+
+            markers[0].place(x=0, y=0, relwidth=1)
+            markers[1].place(x=0, rely=1, relwidth=1, anchor="sw")
+            markers[2].place(x=0, y=0, relheight=1)
+            markers[3].place(relx=1, y=0, relheight=1, anchor="ne")
+
+            self.range_drag["markers"].extend(markers)
 
         # Move the independent insertion row immediately below the current range.
         handle = self.range_drag["handle"]
@@ -2070,6 +2113,7 @@ class App:
 
         for marker in self.range_drag.get("markers", []):
             marker.destroy()
+
         self.range_drag["markers"] = []
 
     def finish_range_drag(self, event):
